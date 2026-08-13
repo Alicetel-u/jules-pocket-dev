@@ -64,6 +64,8 @@ export default function PocketHomeScreen() {
   const [projectQuery, setProjectQuery] = useState('');
   const [deleteCandidate, setDeleteCandidate] = useState<Session | null>(null);
   const [isDeletingTask, setIsDeletingTask] = useState(false);
+  const [deleteTaskError, setDeleteTaskError] = useState<string | null>(null);
+  const [deletedSessionNames, setDeletedSessionNames] = useState<Set<string>>(() => new Set());
   const { sources, sessions, isLoading, error, clearError, syncAllSources, fetchSessions, createSession, deleteSession } = useJulesApi({ apiKey });
 
   const load = useCallback(async () => {
@@ -85,11 +87,12 @@ export default function PocketHomeScreen() {
     return () => clearInterval(timer);
   }, [apiKey, fetchSessions]);
 
-  const tasks = useMemo(() => sessions.filter((session) => groupFor(session) === group).sort((a, b) => Date.parse(b.updateTime) - Date.parse(a.updateTime)), [group, sessions]);
+  const visibleSessions = useMemo(() => sessions.filter((session) => !deletedSessionNames.has(session.name)), [deletedSessionNames, sessions]);
+  const tasks = useMemo(() => visibleSessions.filter((session) => groupFor(session) === group).sort((a, b) => Date.parse(b.updateTime) - Date.parse(a.updateTime)), [group, visibleSessions]);
   const taskCounts = useMemo(() => sessions.reduce<Record<TaskGroup, number>>((counts, session) => {
     counts[groupFor(session)] += 1;
     return counts;
-  }, { running: 0, waiting: 0, completed: 0 }), [sessions]);
+  }, { running: 0, waiting: 0, completed: 0 }), [visibleSessions]);
   const selectedIsFavorite = !!selectedSource && favorites.some((source) => source.name === selectedSource.name);
   const availableProjects = useMemo(() => {
     const query = projectQuery.trim().toLowerCase();
@@ -140,22 +143,26 @@ export default function PocketHomeScreen() {
   }, []);
 
   const confirmDeleteTask = useCallback((session: Session) => {
+    clearError();
+    setDeleteTaskError(null);
     setDeleteCandidate(session);
-  }, []);
+  }, [clearError]);
 
   const deleteSelectedTask = useCallback(async () => {
     if (!deleteCandidate || isDeletingTask) return;
     setIsDeletingTask(true);
+    setDeleteTaskError(null);
     const deleted = await deleteSession(deleteCandidate.name);
     if (deleted) {
+      setDeletedSessionNames((current) => new Set(current).add(deleteCandidate.name));
       setDeleteCandidate(null);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await fetchSessions(true);
     } else {
+      setDeleteTaskError('削除できませんでした。下のエラー内容を確認して、もう一度お試しください。');
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
     setIsDeletingTask(false);
-  }, [deleteCandidate, deleteSession, fetchSessions, isDeletingTask]);
+  }, [deleteCandidate, deleteSession, isDeletingTask]);
 
   if (!apiKey) {
     return <SafeAreaView style={[styles.empty, { backgroundColor: colors.background }]}><Text style={[styles.emptyTitle, { color: colors.text }]}>Jules Pocket Dev</Text><Text style={[styles.emptyText, { color: colors.icon }]}>はじめに Jules API キーを設定してください。</Text><TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.primary }]} onPress={() => router.push('/settings')}><Text style={styles.primaryButtonText}>設定を開く</Text></TouchableOpacity></SafeAreaView>;
@@ -204,6 +211,7 @@ export default function PocketHomeScreen() {
             <Text style={[styles.confirmTitle, { color: colors.text }]}>{t('deleteTaskTitle')}</Text>
             <Text style={[styles.confirmMessage, { color: colors.icon }]}>{t('deleteTaskMessage')}</Text>
             <Text numberOfLines={2} style={[styles.confirmTaskName, { color: colors.text, backgroundColor: colors.surfaceSecondary }]}>{deleteCandidate?.title || 'Jules タスク'}</Text>
+            {deleteTaskError || error ? <View style={[styles.confirmError, { backgroundColor: `${colors.error}17` }]}><Text selectable style={[styles.confirmErrorText, { color: colors.error }]}>{error || deleteTaskError}</Text></View> : null}
             <View style={styles.confirmActions}>
               <TouchableOpacity accessibilityRole="button" disabled={isDeletingTask} onPress={() => setDeleteCandidate(null)} style={[styles.confirmButton, { borderColor: colors.border }]}><Text style={{ color: colors.text, fontWeight: '800' }}>{t('cancel')}</Text></TouchableOpacity>
               <TouchableOpacity accessibilityRole="button" disabled={isDeletingTask} onPress={() => void deleteSelectedTask()} style={[styles.confirmButton, { backgroundColor: colors.error, opacity: isDeletingTask ? 0.6 : 1 }]}><Text style={styles.confirmDeleteText}>{isDeletingTask ? t('processing') : t('deleteTask')}</Text></TouchableOpacity>
@@ -282,6 +290,8 @@ const styles = StyleSheet.create({
   confirmTitle: { fontSize: 19, fontWeight: '900', textAlign: 'center' },
   confirmMessage: { fontSize: 13, lineHeight: 20, textAlign: 'center' },
   confirmTaskName: { width: '100%', borderRadius: 12, padding: 11, fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  confirmError: { width: '100%', borderRadius: 12, padding: 11 },
+  confirmErrorText: { fontSize: 12, lineHeight: 18, fontWeight: '700', textAlign: 'center' },
   confirmActions: { width: '100%', flexDirection: 'row', gap: 10, marginTop: 5 },
   confirmButton: { flex: 1, minHeight: 48, borderWidth: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   confirmDeleteText: { color: '#ffffff', fontWeight: '900' },
