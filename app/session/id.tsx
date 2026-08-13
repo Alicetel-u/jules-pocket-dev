@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -82,6 +82,13 @@ export default function SessionDetailScreen() {
       : sessionState === 'QUEUED'
         ? { title: t('sessionQueuedTitle'), detail: t('sessionQueuedDetail') }
         : { title: t('sessionConnectingTitle'), detail: t('sessionConnectingDetail') };
+
+  const visibleActivities = useMemo(() => activities.filter((activity) => {
+    if (!activity.progressUpdated) return true;
+    const { title: progressTitle, description } = activity.progressUpdated;
+    if (progressTitle || description) return true;
+    return (activity.artifacts ?? []).some((artifact) => artifact.bashOutput || artifact.media);
+  }), [activities]);
 
   // キーボード表示時のアニメーション付きパディング調整
   useEffect(() => {
@@ -381,7 +388,7 @@ export default function SessionDetailScreen() {
         ) : (
           <FlatList
             ref={flatListRef}
-            data={activities}
+            data={visibleActivities}
             keyExtractor={(item) => item.name}
             renderItem={renderActivityItem}
             contentContainerStyle={styles.chatContent}

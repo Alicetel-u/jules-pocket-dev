@@ -394,30 +394,24 @@ function PlanApprovedActivity({ activity, isDark, colors, formatTime, youLabel, 
   );
 }
 
-function ProgressUpdatedActivity({ activity, isDark, colors, workingLabel }: { activity: Activity, isDark: boolean, colors: ThemeColors, workingLabel: string }) {
+function ProgressUpdatedActivity({ activity, isDark, colors }: { activity: Activity, isDark: boolean, colors: ThemeColors }) {
   const [expanded, setExpanded] = useState(false);
-  const [showCode, setShowCode] = useState(false);
 
   const { title, description } = activity.progressUpdated!;
   const artifacts = activity.artifacts || [];
 
   const bashArtifacts: typeof artifacts = [];
   const mediaArtifacts: typeof artifacts = [];
-  let changeSetArtifacts: typeof artifacts = [];
 
   for (const a of artifacts) {
     if (a.bashOutput) bashArtifacts.push(a);
     if (a.media) mediaArtifacts.push(a);
-    if (a.changeSet?.gitPatch) changeSetArtifacts.push(a);
   }
 
   // CLI実行時(bashOutputあり)は、過去の変更履歴(changeSet)を表示しないようにする
-  if (bashArtifacts.length > 0) {
-    changeSetArtifacts = [];
-  }
+  const hasVisibleContent = title || description || bashArtifacts.length > 0 || mediaArtifacts.length > 0;
 
-  const hasAnyContent = title || description || bashArtifacts.length > 0 ||
-                       changeSetArtifacts.length > 0 || mediaArtifacts.length > 0;
+  if (!hasVisibleContent) return null;
 
   return (
     <View style={styles.container}>
@@ -518,43 +512,7 @@ function ProgressUpdatedActivity({ activity, isDark, colors, workingLabel }: { a
         ))}
 
         {/* changeSet (コード変更) */}
-        {changeSetArtifacts.length > 0 && (
-          <TouchableOpacity
-            style={styles.codeButton}
-            onPress={() => setShowCode(!showCode)}
-          >
-            <IconSymbol name="chevron.left.forwardslash.chevron.right" size={14} color="#2563eb" />
-            <Text style={styles.codeButtonText}>
-              {showCode ? 'Hide Code Changes' : `View Code Changes (${changeSetArtifacts.length})`}
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        {showCode && changeSetArtifacts.map((artifact, index) => {
-          const patch = artifact.changeSet?.gitPatch;
-          if (!patch) return null;
-          return (
-            <View key={index} style={styles.codeContainer}>
-              {patch.suggestedCommitMessage && (
-                <View style={styles.commitMessageContainer}>
-                  <IconSymbol name="text.quote" size={14} color="#64748b" />
-                  <Text style={[styles.commitMessageText, isDark && styles.commitMessageTextDark]}>
-                    {patch.suggestedCommitMessage}
-                  </Text>
-                </View>
-              )}
-              <FileDiffViewer patch={patch.unidiffPatch} isDark={isDark} />
-            </View>
-          );
-        })}
-
         {/* 何もない場合 */}
-        {!hasAnyContent && (
-          <View style={styles.cardHeader}>
-            <IconSymbol name="arrow.clockwise" size={16} color="#64748b" />
-            <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>{workingLabel}</Text>
-          </View>
-        )}
       </View>
     </View>
   );
@@ -592,7 +550,7 @@ export const ActivityItem = React.memo(function ActivityItem({ activity, onAppro
   }
 
   if (activity.progressUpdated) {
-    return <ProgressUpdatedActivity activity={activity} isDark={isDark} colors={colors} workingLabel={t('activityWorking')} />;
+    return <ProgressUpdatedActivity activity={activity} isDark={isDark} colors={colors} />;
   }
 
   return null;
