@@ -13,7 +13,7 @@ import {
   Alert,
   ActionSheetIOS,
 } from 'react-native';
-import { useLocalSearchParams, Stack } from 'expo-router';
+import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -28,12 +28,12 @@ import { useI18n } from '@/constants/i18n-context';
 import { useApiKey } from '@/constants/api-key-context';
 import { SessionHeaderRight } from '@/components/jules/session-header-right';
 import { ErrorBanner } from '@/components/jules/error-banner';
-import { FeedbackBanner } from '@/components/jules/feedback-banner';
 import { SessionInput } from '@/components/jules/session-input';
 import { Colors } from '@/constants/theme';
 
 export default function SessionDetailScreen() {
   const { id, title, submittedPr } = useLocalSearchParams<{ id: string; title: string; submittedPr?: string }>();
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const theme = isDark ? Colors.dark : Colors.light;
@@ -47,12 +47,14 @@ export default function SessionDetailScreen() {
   const [sessionState, setSessionState] = useState<string | null>(null);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [currentSubmittedPr, setCurrentSubmittedPr] = useState<string | import('@/constants/types').PullRequest | undefined>(submittedPr);
+  const [isSendingInstruction, setIsSendingInstruction] = useState(false);
+  const [isStoppingTask, setIsStoppingTask] = useState(false);
   const keyboardPadding = useRef(new Animated.Value(0)).current;
   const preparingPulse = useRef(new Animated.Value(0.35)).current;
   const autoApprovedSessionRef = useRef<string | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
-  const { isLoading, error, clearError, fetchActivities, fetchActivitiesSince, fetchSession, approvePlan, sendMessage } = useJulesApi({ apiKey, t });
+  const { isLoading, error, clearError, fetchActivities, fetchActivitiesSince, fetchSession, approvePlan, sendMessage, deleteSession } = useJulesApi({ apiKey, t });
 
   const isPreparing = activities.length === 0 && (
     !sessionState || sessionState === 'QUEUED' || sessionState === 'PLANNING' || sessionState === 'IN_PROGRESS'
@@ -80,6 +82,16 @@ export default function SessionDetailScreen() {
       : sessionState === 'QUEUED'
         ? { title: t('sessionQueuedTitle'), detail: t('sessionQueuedDetail') }
         : { title: t('sessionConnectingTitle'), detail: t('sessionConnectingDetail') };
+
+  const jobAction = sessionState === 'AWAITING_USER_FEEDBACK'
+    ? t('jobFeedbackAction')
+    : sessionState === 'COMPLETED'
+      ? t('jobCompletedAction')
+      : sessionState === 'FAILED'
+        ? t('jobFailedAction')
+        : sessionState === 'IN_PROGRESS'
+          ? t('jobWorkingAction')
+          : t('jobWaitingAction');
 
   const visibleActivities = useMemo(() => activities.filter((activity) => {
     if (activity.planGenerated || activity.planApprovalRequested) return false;
@@ -255,27 +267,59 @@ export default function SessionDetailScreen() {
   ), [handleApprovePlan]);
 
   const handleSend = async () => {
-    if (!messageInput.trim() || !id) return;
+    if (!messageInput.trim() || !id || isSendingInstruction) return;
 
     const messageToSend = messageInput;
-    setMessageInput(''); // Clear immediately for better UX
+    const optimisticName = `local-${Date.now()}`;
+    const optimisticActivity: Activity = {
+      name: optimisticName,
+      id: optimisticName,
+      createTime: new Date().toISOString(),
+      originator: 'user',
+      userMessaged: { userMessage: messageToSend },
+    };
+    setMessageInput('');
+    setIsSendingInstruction(true);
+    setActivities((current) => [...current, optimisticActivity]);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
 
     try {
       await sendMessage(id, messageToSend);
-      // Reload activities to show the new message
       await loadActivities();
     } catch {
-      // Error is already handled by the API hook
-      // Optionally show error or restore input
+      setActivities((current) => current.filter((activity) => activity.name !== optimisticName));
+      setMessageInput(messageToSend);
+    } finally {
+      setIsSendingInstruction(false);
     }
   };
+
+  const stopTask = useCallback(() => {
+    if (!id || isStoppingTask) return;
+    Alert.alert(t('stopTaskTitle'), t('stopTaskDescription'), [
+      { text: t('cancel'), style: 'cancel' },
+      {
+        text: t('stopTaskConfirm'),
+        style: 'destructive',
+        onPress: () => {
+          setIsStoppingTask(true);
+          void deleteSession(id).then((result) => {
+            if (result.deleted) {
+              void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.back();
+            }
+          }).finally(() => setIsStoppingTask(false));
+        },
+      },
+    ]);
+  }, [deleteSession, id, isStoppingTask, router, t]);
 
   const STATE_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
     QUEUED:                  { label: t('stateQueued'),               color: '#64748b', icon: 'clock' },
     IN_PROGRESS:             { label: t('stateInProgress'),           color: '#2563eb', icon: 'arrow.clockwise' },
     AWAITING_PLAN_APPROVAL:  { label: t('stateAwaitingPlanApproval'), color: '#f59e0b', icon: 'hand.raised' },
     AWAITING_USER_FEEDBACK:  { label: t('stateAwaitingUserFeedback'), color: '#8b5cf6', icon: 'bubble.left' },
-    COMPLETED:               { label: currentSubmittedPr ? t('statePublishing') : t('stateCompleted'), color: '#10b981', icon: 'checkmark.circle' },
+    COMPLETED:               { label: t('stateCompleted'),            color: '#10b981', icon: 'checkmark.circle' },
     FAILED:                  { label: t('stateFailed'),               color: '#ef4444', icon: 'xmark.circle' },
     PAUSED:                  { label: t('statePaused'),               color: '#94a3b8', icon: 'pause.circle' },
   };
@@ -378,7 +422,20 @@ export default function SessionDetailScreen() {
         {/* エラー表示 */}
         <ErrorBanner error={error} isDark={isDark} t={t} clearError={clearError} />
 
-        <FeedbackBanner sessionState={sessionState} isDark={isDark} t={t} />
+        <View style={[styles.jobStatus, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={[styles.jobStatusIcon, { backgroundColor: theme.shadowLight }]}>
+            <IconSymbol name={(STATE_CONFIG[sessionState ?? '']?.icon || 'clock') as any} size={18} color={STATE_CONFIG[sessionState ?? '']?.color || theme.primary} />
+          </View>
+          <View style={styles.jobStatusCopy}>
+            <Text style={[styles.jobStatusTitle, { color: theme.text }]}>{STATE_CONFIG[sessionState ?? '']?.label || t('stateUnknown')}</Text>
+            <Text style={[styles.jobStatusDetail, { color: theme.icon }]}>{jobAction}</Text>
+          </View>
+          {sessionState && !['COMPLETED', 'FAILED'].includes(sessionState) && (
+            <TouchableOpacity onPress={stopTask} disabled={isStoppingTask} style={styles.stopButton} accessibilityRole="button" accessibilityLabel={t('stopTask')}>
+              <IconSymbol name="xmark.circle.fill" size={20} color={theme.error} />
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* チャットエリア */}
         {isLoading && activities.length === 0 ? (
@@ -420,7 +477,7 @@ export default function SessionDetailScreen() {
                     <IconSymbol name="arrow.triangle.pull" size={18} color="#ffffff" />
                     <View style={{ flex: 1, marginLeft: 8 }}>
                       <Text style={styles.prBannerTitle}>{t('prSubmittedTitle')}</Text>
-                      <Text style={styles.prBannerSubtitle} numberOfLines={1}>{t('prAutoPublishDetail')}</Text>
+                      <Text style={styles.prBannerSubtitle} numberOfLines={1}>{t('reviewResult')}</Text>
                     </View>
                     <IconSymbol name="chevron.right" size={14} color="rgba(255,255,255,0.7)" />
                   </LinearGradient>
@@ -478,6 +535,8 @@ export default function SessionDetailScreen() {
           setMessageInput={setMessageInput}
           t={t}
           handleSend={handleSend}
+          sessionState={sessionState}
+          isSending={isSendingInstruction}
         />
       </KeyboardAvoidingView>
     </>
@@ -511,6 +570,12 @@ const styles = StyleSheet.create({
   emptyTextDark: {
     color: '#94a3b8',
   },
+  jobStatus: { marginHorizontal: 12, marginTop: 10, padding: 12, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  jobStatusIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  jobStatusCopy: { flex: 1, minWidth: 0 },
+  jobStatusTitle: { fontSize: 13, fontWeight: '800' },
+  jobStatusDetail: { fontSize: 11, lineHeight: 16, marginTop: 2 },
+  stopButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
   preparingCard: {
     marginTop: 24,
     paddingHorizontal: 22,
