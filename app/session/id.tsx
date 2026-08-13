@@ -422,6 +422,7 @@ export default function SessionDetailScreen() {
         {/* エラー表示 */}
         <ErrorBanner error={error} isDark={isDark} t={t} clearError={clearError} />
 
+        {sessionState !== 'COMPLETED' && (
         <View style={[styles.jobStatus, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={[styles.jobStatusIcon, { backgroundColor: theme.shadowLight }]}>
             <IconSymbol name={(STATE_CONFIG[sessionState ?? '']?.icon || 'clock') as any} size={18} color={STATE_CONFIG[sessionState ?? '']?.color || theme.primary} />
@@ -436,6 +437,7 @@ export default function SessionDetailScreen() {
             </TouchableOpacity>
           )}
         </View>
+        )}
 
         {/* チャットエリア */}
         {isLoading && activities.length === 0 ? (
@@ -527,7 +529,7 @@ export default function SessionDetailScreen() {
         )}
 
         {/* 入力エリア - Androidではキーボード用パディング付き */}
-        <SessionInput
+        {sessionState !== 'COMPLETED' && sessionState !== 'FAILED' && <SessionInput
           isDark={isDark}
           insetsBottom={insets.bottom}
           keyboardPadding={keyboardPadding}
@@ -537,7 +539,7 @@ export default function SessionDetailScreen() {
           handleSend={handleSend}
           sessionState={sessionState}
           isSending={isSendingInstruction}
-        />
+        />}
       </KeyboardAvoidingView>
     </>
   );

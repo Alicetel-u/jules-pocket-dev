@@ -19,7 +19,7 @@ interface I18nProviderProps {
 }
 
 export function I18nProvider({ children }: I18nProviderProps) {
-  const [language, setLanguageState] = useState<Language>('en');
+  const [language, setLanguageState] = useState<Language>('ja');
   const [isLoaded, setIsLoaded] = useState(false);
 
   // 起動時に保存された言語設定を読み込む
