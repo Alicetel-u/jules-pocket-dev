@@ -33,11 +33,13 @@ import { ApprovalBanner } from '@/components/jules/approval-banner';
 import { FeedbackBanner } from '@/components/jules/feedback-banner';
 import { SessionInput } from '@/components/jules/session-input';
 import { PrCard } from '@/components/jules/pr-card';
+import { Colors } from '@/constants/theme';
 
 export default function SessionDetailScreen() {
   const { id, title, submittedPr } = useLocalSearchParams<{ id: string; title: string; submittedPr?: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const theme = isDark ? Colors.dark : Colors.light;
   const { t } = useI18n();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
@@ -49,9 +51,36 @@ export default function SessionDetailScreen() {
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [currentSubmittedPr, setCurrentSubmittedPr] = useState<string | import('@/constants/types').PullRequest | undefined>(submittedPr);
   const keyboardPadding = useRef(new Animated.Value(0)).current;
+  const preparingPulse = useRef(new Animated.Value(0.35)).current;
 
   const flatListRef = useRef<FlatList>(null);
   const { isLoading, error, clearError, fetchActivities, fetchActivitiesSince, fetchSession, approvePlan, sendMessage } = useJulesApi({ apiKey, t });
+
+  const isPreparing = activities.length === 0 && (
+    !sessionState || sessionState === 'QUEUED' || sessionState === 'PLANNING' || sessionState === 'IN_PROGRESS'
+  );
+
+  useEffect(() => {
+    if (!isPreparing) {
+      preparingPulse.setValue(0.35);
+      return;
+    }
+    const animation = Animated.loop(Animated.sequence([
+      Animated.timing(preparingPulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+      Animated.timing(preparingPulse, { toValue: 0.35, duration: 900, useNativeDriver: true }),
+    ]));
+    animation.start();
+    return () => animation.stop();
+  }, [isPreparing, preparingPulse]);
+
+  const preparingStage = sessionState === 'IN_PROGRESS' ? 2 : sessionState === 'PLANNING' ? 1 : 0;
+  const preparingCopy = sessionState === 'IN_PROGRESS'
+    ? { title: t('sessionWorkingTitle'), detail: t('sessionWorkingDetail') }
+    : sessionState === 'PLANNING'
+      ? { title: t('sessionPlanningTitle'), detail: t('sessionPlanningDetail') }
+      : sessionState === 'QUEUED'
+        ? { title: t('sessionQueuedTitle'), detail: t('sessionQueuedDetail') }
+        : { title: t('sessionConnectingTitle'), detail: t('sessionConnectingDetail') };
 
   // キーボード表示時のアニメーション付きパディング調整
   useEffect(() => {
@@ -392,12 +421,29 @@ export default function SessionDetailScreen() {
               ) : null
             }
             ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <IconSymbol name="bubble.left.and.bubble.right" size={48} color={isDark ? '#475569' : '#94a3b8'} />
-                <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
-                  {sessionState === 'QUEUED' || sessionState === 'PLANNING' ? t('sessionPreparing') : t('noActivities')}
-                </Text>
-              </View>
+              isPreparing ? (
+                <View style={[styles.preparingCard, { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.primary }]}>
+                  <Animated.View style={[styles.preparingIcon, { backgroundColor: theme.shadowLight, opacity: preparingPulse }]}>
+                    <IconSymbol name="arrow.clockwise" size={28} color={theme.primary} />
+                  </Animated.View>
+                  <Text style={[styles.preparingTitle, { color: theme.text }]}>{preparingCopy.title}</Text>
+                  <Text style={[styles.preparingDetail, { color: theme.icon }]}>{preparingCopy.detail}</Text>
+                  <View style={styles.preparingSteps}>
+                    {[t('sessionStepConnect'), t('sessionStepAnalyze'), t('sessionStepWork')].map((label, index) => (
+                      <View key={label} style={styles.preparingStep}>
+                        <View style={[styles.preparingStepLine, { backgroundColor: theme.border }, index <= preparingStage && { backgroundColor: theme.primary }]} />
+                        <Text style={[styles.preparingStepText, { color: theme.tabIconDefault }, index <= preparingStage && { color: theme.primary }]}>{label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={styles.refreshStatus}><Animated.View style={[styles.refreshDot, { backgroundColor: theme.success, opacity: preparingPulse }]} /><Text style={[styles.refreshStatusText, { color: theme.icon }]}>{t('sessionAutoRefresh')}</Text></View>
+                </View>
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <IconSymbol name="bubble.left.and.bubble.right" size={48} color={isDark ? '#475569' : '#94a3b8'} />
+                  <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>{t('noActivities')}</Text>
+                </View>
+              )
             }
             ListFooterComponent={
               <PrCard submittedPr={currentSubmittedPr} isDark={isDark} t={t} />
@@ -447,6 +493,28 @@ const styles = StyleSheet.create({
   emptyTextDark: {
     color: '#94a3b8',
   },
+  preparingCard: {
+    marginTop: 24,
+    paddingHorizontal: 22,
+    paddingVertical: 28,
+    borderRadius: 22,
+    alignItems: 'center',
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 4,
+  },
+  preparingIcon: { width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', marginBottom: 17 },
+  preparingTitle: { fontSize: 19, fontWeight: '800', textAlign: 'center' },
+  preparingDetail: { fontSize: 13, lineHeight: 20, textAlign: 'center', marginTop: 8, maxWidth: 320 },
+  preparingSteps: { width: '100%', flexDirection: 'row', gap: 7, marginTop: 24 },
+  preparingStep: { flex: 1, gap: 7 },
+  preparingStepLine: { height: 5, borderRadius: 3 },
+  preparingStepText: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  refreshStatus: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 22 },
+  refreshDot: { width: 7, height: 7, borderRadius: 4 },
+  refreshStatusText: { fontSize: 11, fontWeight: '600' },
   prBanner: {
     marginBottom: 16,
     borderRadius: 12,
