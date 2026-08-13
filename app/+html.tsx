@@ -3,6 +3,9 @@ import type { PropsWithChildren } from 'react';
 
 /** Web-only document metadata for the installable Safari experience. */
 export default function RootHtml({ children }: PropsWithChildren) {
+  const configuredBaseUrl = process.env.EXPO_BASE_URL || '/';
+  const baseUrl = configuredBaseUrl.endsWith('/') ? configuredBaseUrl : `${configuredBaseUrl}/`;
+
   return (
     <html lang="ja">
       <head>
@@ -13,8 +16,8 @@ export default function RootHtml({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Pocket Dev" />
-        <link rel="manifest" href="/manifest.json" />
-        <link rel="apple-touch-icon" href="/favicon.ico" />
+        <link rel="manifest" href={`${baseUrl}manifest.json`} />
+        <link rel="apple-touch-icon" href={`${baseUrl}favicon.ico`} />
         <ScrollViewStyleReset />
       </head>
       <body>{children}</body>

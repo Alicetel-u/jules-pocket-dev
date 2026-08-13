@@ -21,16 +21,15 @@ bun run build:web
 
 The deployable static site is generated in `dist/`.
 
-## Deploy with Vercel
+## Deploy with GitHub Pages
 
-1. Push this repository to GitHub.
-2. Sign in to [Vercel](https://vercel.com/) and choose **Add New → Project**.
-3. Import this GitHub repository.
-4. Keep the detected `vercel.json` settings and deploy.
-5. Open the generated `https://` URL on the iPhone in Safari.
-6. Tap **Share → Add to Home Screen → Add**.
+1. In the GitHub repository, open **Settings → Pages**.
+2. Under **Build and deployment**, choose **GitHub Actions** as the source.
+3. Push to `main` (the included workflow builds and deploys the PWA automatically).
+4. After the workflow finishes, open `https://alicetel-u.github.io/jules-pocket-dev/` on the iPhone in Safari.
+5. Tap **Share → Add to Home Screen → Add**.
 
-Vercel rebuilds the static PWA after each push to the connected branch. No API-key environment variable is needed or supported for this app.
+GitHub Actions rebuilds the static PWA after each push to `main`. No API-key environment variable is needed or supported for this app.
 
 ## iPhone use
 
