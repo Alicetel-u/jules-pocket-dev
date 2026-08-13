@@ -28,7 +28,6 @@ import { useI18n } from '@/constants/i18n-context';
 import { useApiKey } from '@/constants/api-key-context';
 import { SessionHeaderRight } from '@/components/jules/session-header-right';
 import { ErrorBanner } from '@/components/jules/error-banner';
-import { ApprovalBanner } from '@/components/jules/approval-banner';
 import { FeedbackBanner } from '@/components/jules/feedback-banner';
 import { SessionInput } from '@/components/jules/session-input';
 import { Colors } from '@/constants/theme';
@@ -50,6 +49,7 @@ export default function SessionDetailScreen() {
   const [currentSubmittedPr, setCurrentSubmittedPr] = useState<string | import('@/constants/types').PullRequest | undefined>(submittedPr);
   const keyboardPadding = useRef(new Animated.Value(0)).current;
   const preparingPulse = useRef(new Animated.Value(0.35)).current;
+  const autoApprovedSessionRef = useRef<string | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
   const { isLoading, error, clearError, fetchActivities, fetchActivitiesSince, fetchSession, approvePlan, sendMessage } = useJulesApi({ apiKey, t });
@@ -82,6 +82,7 @@ export default function SessionDetailScreen() {
         : { title: t('sessionConnectingTitle'), detail: t('sessionConnectingDetail') };
 
   const visibleActivities = useMemo(() => activities.filter((activity) => {
+    if (activity.planGenerated || activity.planApprovalRequested) return false;
     if (!activity.progressUpdated) return true;
     const { title: progressTitle, description } = activity.progressUpdated;
     if (progressTitle || description) return true;
@@ -243,6 +244,12 @@ export default function SessionDetailScreen() {
     }
   }, [id, approvePlan, loadActivities, loadSessionState]);
 
+  useEffect(() => {
+    if (!id || sessionState !== 'AWAITING_PLAN_APPROVAL' || autoApprovedSessionRef.current === id) return;
+    autoApprovedSessionRef.current = id;
+    void handleApprovePlan(id);
+  }, [handleApprovePlan, id, sessionState]);
+
   const renderActivityItem = useCallback(({ item }: { item: Activity }) => (
     <ActivityItem activity={item} onApprovePlan={handleApprovePlan} />
   ), [handleApprovePlan]);
@@ -371,8 +378,6 @@ export default function SessionDetailScreen() {
         {/* エラー表示 */}
         <ErrorBanner error={error} isDark={isDark} t={t} clearError={clearError} />
 
-        {/* Global approve button fallback (API may not emit planApprovalRequested activity) */}
-        <ApprovalBanner sessionState={sessionState} id={id} isDark={isDark} t={t} handleApprovePlan={handleApprovePlan} />
         <FeedbackBanner sessionState={sessionState} isDark={isDark} t={t} />
 
         {/* チャットエリア */}

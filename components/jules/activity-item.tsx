@@ -538,11 +538,11 @@ export const ActivityItem = React.memo(function ActivityItem({ activity, onAppro
   }
 
   if (activity.planGenerated?.plan) {
-    return <PlanGeneratedActivity activity={activity} isDark={isDark} colors={colors} title={t('activityPlanGenerated')} />;
+    return null;
   }
 
   if (activity.planApprovalRequested) {
-    return <PlanApprovalRequestedActivity activity={activity} isDark={isDark} colors={colors} onApprovePlan={onApprovePlan} title={t('activityApprovalRequired')} description={t('activityApprovalDescription')} buttonLabel={t('activityApprovePlan')} />;
+    return null;
   }
 
   if (activity.planApproved) {

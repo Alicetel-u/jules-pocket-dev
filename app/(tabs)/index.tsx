@@ -130,7 +130,7 @@ export default function PocketHomeScreen() {
       Alert.alert('プロジェクトと指示を選んでください');
       return;
     }
-    const session = await createSession(selectedSource.name, prompt, selectedSource.githubRepo?.defaultBranch?.displayName || 'main', [], true);
+    const session = await createSession(selectedSource.name, prompt, selectedSource.githubRepo?.defaultBranch?.displayName || 'main', [], false);
     if (!session) return;
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setPrompt('');
