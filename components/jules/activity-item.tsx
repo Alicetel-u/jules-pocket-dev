@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { Activity } from '@/constants/types';
 import { Colors, type ThemeColors } from '@/constants/theme';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useI18n } from '@/constants/i18n-context';
 
 interface ActivityItemProps {
   activity: Activity;
@@ -268,7 +269,7 @@ function AgentMessageActivity({ activity, isDark, colors, formatTime, getMarkdow
   );
 }
 
-function UserMessageActivity({ activity, isDark, colors, formatTime }: { activity: Activity, isDark: boolean, colors: ThemeColors, formatTime: (dateStr: string) => string }) {
+function UserMessageActivity({ activity, isDark, colors, formatTime, youLabel }: { activity: Activity, isDark: boolean, colors: ThemeColors, formatTime: (dateStr: string) => string, youLabel: string }) {
   return (
     <View style={[styles.container, styles.containerUser]}>
       <View style={styles.bubble}>
@@ -279,7 +280,7 @@ function UserMessageActivity({ activity, isDark, colors, formatTime }: { activit
           end={{ x: 1, y: 0 }}
         >
           <View style={styles.header}>
-            <Text style={styles.senderUser}>You</Text>
+            <Text style={styles.senderUser}>{youLabel}</Text>
             <Text style={styles.timeUser}>{formatTime(activity.createTime)}</Text>
           </View>
           <Text style={styles.messageUser} selectable>
@@ -296,7 +297,7 @@ function UserMessageActivity({ activity, isDark, colors, formatTime }: { activit
   );
 }
 
-function PlanGeneratedActivity({ activity, isDark, colors }: { activity: Activity, isDark: boolean, colors: ThemeColors }) {
+function PlanGeneratedActivity({ activity, isDark, colors, title }: { activity: Activity, isDark: boolean, colors: ThemeColors, title: string }) {
   const plan = activity.planGenerated!.plan;
   return (
     <View style={styles.container}>
@@ -308,7 +309,7 @@ function PlanGeneratedActivity({ activity, isDark, colors }: { activity: Activit
           >
             <IconSymbol name="doc.text" size={16} color="#ffffff" />
           </LinearGradient>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Plan Generated</Text>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>{title}</Text>
         </View>
         {plan.steps?.map((step, index) => (
           <View key={step.id || index} style={styles.planStep}>
@@ -327,7 +328,7 @@ function PlanGeneratedActivity({ activity, isDark, colors }: { activity: Activit
   );
 }
 
-function PlanApprovalRequestedActivity({ activity, isDark, colors, onApprovePlan }: { activity: Activity, isDark: boolean, colors: ThemeColors, onApprovePlan?: (planId: string) => void }) {
+function PlanApprovalRequestedActivity({ activity, isDark, colors, onApprovePlan, title, description, buttonLabel }: { activity: Activity, isDark: boolean, colors: ThemeColors, onApprovePlan?: (planId: string) => void, title: string, description: string, buttonLabel: string }) {
   const planId = activity.planApprovalRequested!.planId;
   return (
     <View style={styles.container}>
@@ -346,10 +347,10 @@ function PlanApprovalRequestedActivity({ activity, isDark, colors, onApprovePlan
           >
             <IconSymbol name="hand.raised" size={16} color="#ffffff" />
           </LinearGradient>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Approval Required</Text>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>{title}</Text>
         </View>
         <Text style={[styles.description, { color: colors.icon }]}>
-          Jules is waiting for your approval to proceed with the plan.
+          {description}
         </Text>
         {onApprovePlan && (
           <TouchableOpacity
@@ -367,7 +368,7 @@ function PlanApprovalRequestedActivity({ activity, isDark, colors, onApprovePlan
               end={{ x: 1, y: 0 }}
             >
               <IconSymbol name="checkmark.circle.fill" size={20} color="#ffffff" />
-              <Text style={styles.approveButtonText}>Approve Plan</Text>
+              <Text style={styles.approveButtonText}>{buttonLabel}</Text>
             </LinearGradient>
           </TouchableOpacity>
         )}
@@ -376,24 +377,24 @@ function PlanApprovalRequestedActivity({ activity, isDark, colors, onApprovePlan
   );
 }
 
-function PlanApprovedActivity({ activity, isDark, colors, formatTime }: { activity: Activity, isDark: boolean, colors: ThemeColors, formatTime: (dateStr: string) => string }) {
+function PlanApprovedActivity({ activity, isDark, colors, formatTime, youLabel, approvedLabel }: { activity: Activity, isDark: boolean, colors: ThemeColors, formatTime: (dateStr: string) => string, youLabel: string, approvedLabel: string }) {
   return (
     <View style={[styles.container, styles.containerUser]}>
       <View style={[styles.bubble, styles.bubbleUser]}>
         <View style={styles.header}>
-          <Text style={styles.senderUser}>You</Text>
+          <Text style={styles.senderUser}>{youLabel}</Text>
           <Text style={styles.timeUser}>{formatTime(activity.createTime)}</Text>
         </View>
         <View style={styles.approvalRow}>
           <IconSymbol name="checkmark.circle.fill" size={16} color="#ffffff" />
-          <Text style={styles.messageUser}>Plan approved</Text>
+          <Text style={styles.messageUser}>{approvedLabel}</Text>
         </View>
       </View>
     </View>
   );
 }
 
-function ProgressUpdatedActivity({ activity, isDark, colors }: { activity: Activity, isDark: boolean, colors: ThemeColors }) {
+function ProgressUpdatedActivity({ activity, isDark, colors, workingLabel }: { activity: Activity, isDark: boolean, colors: ThemeColors, workingLabel: string }) {
   const [expanded, setExpanded] = useState(false);
   const [showCode, setShowCode] = useState(false);
 
@@ -551,7 +552,7 @@ function ProgressUpdatedActivity({ activity, isDark, colors }: { activity: Activ
         {!hasAnyContent && (
           <View style={styles.cardHeader}>
             <IconSymbol name="arrow.clockwise" size={16} color="#64748b" />
-            <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>Working...</Text>
+            <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>{workingLabel}</Text>
           </View>
         )}
       </View>
@@ -568,29 +569,30 @@ export const ActivityItem = React.memo(function ActivityItem({ activity, onAppro
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
+  const { t } = useI18n();
 
   if (activity.agentMessaged?.agentMessage) {
     return <AgentMessageActivity activity={activity} isDark={isDark} colors={colors} formatTime={formatTime} getMarkdownStyles={getMarkdownStyles} />;
   }
 
   if (activity.userMessaged?.userMessage) {
-    return <UserMessageActivity activity={activity} isDark={isDark} colors={colors} formatTime={formatTime} />;
+    return <UserMessageActivity activity={activity} isDark={isDark} colors={colors} formatTime={formatTime} youLabel={t('activityYou')} />;
   }
 
   if (activity.planGenerated?.plan) {
-    return <PlanGeneratedActivity activity={activity} isDark={isDark} colors={colors} />;
+    return <PlanGeneratedActivity activity={activity} isDark={isDark} colors={colors} title={t('activityPlanGenerated')} />;
   }
 
   if (activity.planApprovalRequested) {
-    return <PlanApprovalRequestedActivity activity={activity} isDark={isDark} colors={colors} onApprovePlan={onApprovePlan} />;
+    return <PlanApprovalRequestedActivity activity={activity} isDark={isDark} colors={colors} onApprovePlan={onApprovePlan} title={t('activityApprovalRequired')} description={t('activityApprovalDescription')} buttonLabel={t('activityApprovePlan')} />;
   }
 
   if (activity.planApproved) {
-    return <PlanApprovedActivity activity={activity} isDark={isDark} colors={colors} formatTime={formatTime} />;
+    return <PlanApprovedActivity activity={activity} isDark={isDark} colors={colors} formatTime={formatTime} youLabel={t('activityYou')} approvedLabel={t('activityPlanApproved')} />;
   }
 
   if (activity.progressUpdated) {
-    return <ProgressUpdatedActivity activity={activity} isDark={isDark} colors={colors} />;
+    return <ProgressUpdatedActivity activity={activity} isDark={isDark} colors={colors} workingLabel={t('activityWorking')} />;
   }
 
   return null;
@@ -607,7 +609,9 @@ const styles = StyleSheet.create({
   
   // Modern chat bubbles
   bubble: {
-    maxWidth: '82%',
+    maxWidth: '92%',
+    minWidth: 0,
+    flexShrink: 1,
     flexDirection: 'row',
     gap: 10,
   },
@@ -623,6 +627,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   bubbleUser: {
+    minWidth: 0,
+    flexShrink: 1,
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 18,
@@ -698,6 +704,7 @@ const styles = StyleSheet.create({
   
   // Message
   messageUser: {
+    flexShrink: 1,
     fontSize: 14,
     lineHeight: 20,
     color: '#ffffff',

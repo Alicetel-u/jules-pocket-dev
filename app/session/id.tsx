@@ -59,9 +59,10 @@ export default function SessionDetailScreen() {
   const isPreparing = activities.length === 0 && (
     !sessionState || sessionState === 'QUEUED' || sessionState === 'PLANNING' || sessionState === 'IN_PROGRESS'
   );
+  const isLiveWorking = sessionState === 'IN_PROGRESS';
 
   useEffect(() => {
-    if (!isPreparing) {
+    if (!isPreparing && !isLiveWorking) {
       preparingPulse.setValue(0.35);
       return;
     }
@@ -71,7 +72,7 @@ export default function SessionDetailScreen() {
     ]));
     animation.start();
     return () => animation.stop();
-  }, [isPreparing, preparingPulse]);
+  }, [isLiveWorking, isPreparing, preparingPulse]);
 
   const preparingStage = sessionState === 'IN_PROGRESS' ? 2 : sessionState === 'PLANNING' ? 1 : 0;
   const preparingCopy = sessionState === 'IN_PROGRESS'
@@ -258,13 +259,13 @@ export default function SessionDetailScreen() {
   };
 
   const STATE_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-    QUEUED:                  { label: 'Queued',           color: '#64748b', icon: 'clock' },
-    IN_PROGRESS:             { label: 'Working...',       color: '#2563eb', icon: 'arrow.clockwise' },
-    AWAITING_PLAN_APPROVAL:  { label: 'Needs Approval',   color: '#f59e0b', icon: 'hand.raised' },
-    AWAITING_USER_FEEDBACK:  { label: 'Waiting for You',  color: '#8b5cf6', icon: 'bubble.left' },
-    COMPLETED:               { label: 'Completed',        color: '#10b981', icon: 'checkmark.circle' },
-    FAILED:                  { label: 'Failed',           color: '#ef4444', icon: 'xmark.circle' },
-    PAUSED:                  { label: 'Paused',           color: '#94a3b8', icon: 'pause.circle' },
+    QUEUED:                  { label: t('stateQueued'),               color: '#64748b', icon: 'clock' },
+    IN_PROGRESS:             { label: t('stateInProgress'),           color: '#2563eb', icon: 'arrow.clockwise' },
+    AWAITING_PLAN_APPROVAL:  { label: t('stateAwaitingPlanApproval'), color: '#f59e0b', icon: 'hand.raised' },
+    AWAITING_USER_FEEDBACK:  { label: t('stateAwaitingUserFeedback'), color: '#8b5cf6', icon: 'bubble.left' },
+    COMPLETED:               { label: t('stateCompleted'),            color: '#10b981', icon: 'checkmark.circle' },
+    FAILED:                  { label: t('stateFailed'),               color: '#ef4444', icon: 'xmark.circle' },
+    PAUSED:                  { label: t('statePaused'),               color: '#94a3b8', icon: 'pause.circle' },
   };
 
   // Export session handler
@@ -446,7 +447,19 @@ export default function SessionDetailScreen() {
               )
             }
             ListFooterComponent={
-              <PrCard submittedPr={currentSubmittedPr} isDark={isDark} t={t} />
+              <>
+                {isLiveWorking && activities.length > 0 && (
+                  <View style={[styles.liveStatus, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                    <Animated.View style={[styles.liveStatusDot, { backgroundColor: theme.primary, opacity: preparingPulse }]} />
+                    <View style={styles.liveStatusCopy}>
+                      <Text style={[styles.liveStatusTitle, { color: theme.text }]}>{t('sessionWorkingTitle')}</Text>
+                      <Text style={[styles.liveStatusDetail, { color: theme.icon }]}>{t('sessionAutoRefresh')}</Text>
+                    </View>
+                    <IconSymbol name="arrow.clockwise" size={18} color={theme.primary} />
+                  </View>
+                )}
+                <PrCard submittedPr={currentSubmittedPr} isDark={isDark} t={t} />
+              </>
             }
           />
         )}
@@ -476,7 +489,7 @@ const styles = StyleSheet.create({
   },
   chatContent: {
     padding: 16,
-    paddingBottom: 8,
+    paddingBottom: 24,
   },
   chatList: {
     flex: 1,
@@ -515,6 +528,11 @@ const styles = StyleSheet.create({
   refreshStatus: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 22 },
   refreshDot: { width: 7, height: 7, borderRadius: 4 },
   refreshStatusText: { fontSize: 11, fontWeight: '600' },
+  liveStatus: { marginTop: 12, marginHorizontal: 16, padding: 14, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  liveStatusDot: { width: 10, height: 10, borderRadius: 5 },
+  liveStatusCopy: { flex: 1, minWidth: 0 },
+  liveStatusTitle: { fontSize: 14, fontWeight: '800' },
+  liveStatusDetail: { fontSize: 11, fontWeight: '600', marginTop: 2 },
   prBanner: {
     marginBottom: 16,
     borderRadius: 12,
