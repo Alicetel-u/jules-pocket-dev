@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApiKey } from '@/constants/api-key-context';
 import type { Session, Source } from '@/constants/types';
@@ -174,10 +173,7 @@ export default function PocketHomeScreen() {
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}>
-        <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-          <View style={styles.heroGlow} />
-          <View style={styles.header}><View style={styles.headerCopy}><Text style={styles.kicker}>JULES POCKET DEV</Text><Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.82} style={styles.title}>今日は何を任せますか？</Text><Text style={styles.heroSubtitle}>思いついたら、ここからすぐJulesへ。</Text></View><TouchableOpacity accessibilityRole="button" accessibilityLabel="更新" onPress={() => void refresh()} style={styles.refresh}><IconSymbol name="arrow.clockwise" size={18} color="#ffffff" /></TouchableOpacity></View>
-        </LinearGradient>
+        <View style={styles.compactHeader}><View style={styles.brandRow}><View style={[styles.brandIcon, { backgroundColor: colors.primary }]}><IconSymbol name="chevron.left.forwardslash.chevron.right" size={16} color="#ffffff" /></View><Text style={[styles.compactTitle, { color: colors.text }]}>Pocket Dev</Text></View><TouchableOpacity accessibilityRole="button" accessibilityLabel="更新" onPress={() => void refresh()} style={[styles.refresh, { backgroundColor: colors.surface, borderColor: colors.border }]}><IconSymbol name="arrow.clockwise" size={17} color={colors.primary} /></TouchableOpacity></View>
         {error ? <TouchableOpacity style={[styles.error, { backgroundColor: colors.error }]} onPress={clearError}><Text style={styles.errorText}>{error}</Text></TouchableOpacity> : null}
 
         <View style={styles.projectHeading}><Text style={[styles.sectionTitle, { color: colors.text }]}>{t('favoriteProjects')}</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel={t('addProject')} onPress={() => setIsProjectPickerVisible(true)} style={[styles.addProjectButton, { backgroundColor: colors.surface, borderColor: colors.border }]}><IconSymbol name="plus" size={18} color={colors.primary} /><Text style={[styles.addProjectText, { color: colors.primary }]}>{t('addProject')}</Text></TouchableOpacity></View>
@@ -228,33 +224,30 @@ export default function PocketHomeScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  content: { width: '100%', maxWidth: 680, alignSelf: 'center', padding: 16, paddingBottom: 42, gap: 15 },
-  hero: { borderRadius: 24, padding: 20, overflow: 'hidden', minHeight: 146, justifyContent: 'center' },
-  heroGlow: { position: 'absolute', width: 170, height: 170, borderRadius: 85, backgroundColor: 'rgba(255,255,255,0.13)', right: -45, top: -70 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
-  headerCopy: { flex: 1, minWidth: 0 },
-  kicker: { color: '#ffffff', fontWeight: '900', fontSize: 10, letterSpacing: 1.6, opacity: 0.84 },
-  title: { color: '#ffffff', fontSize: 27, lineHeight: 34, fontWeight: '900', marginTop: 8, letterSpacing: -0.7 },
-  heroSubtitle: { color: '#eef2ff', fontSize: 13, marginTop: 8, fontWeight: '600' },
-  refresh: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.18)' },
-  projectHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 4 },
-  sectionTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.25, flexShrink: 1 },
+  content: { width: '100%', maxWidth: 680, alignSelf: 'center', paddingHorizontal: 14, paddingTop: 10, paddingBottom: 28, gap: 10 },
+  compactHeader: { minHeight: 42, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  brandIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  compactTitle: { fontSize: 19, fontWeight: '900', letterSpacing: -0.4 },
+  refresh: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, borderWidth: 1 },
+  projectHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  sectionTitle: { fontSize: 17, fontWeight: '900', letterSpacing: -0.25, flexShrink: 1 },
   addProjectButton: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 18, paddingHorizontal: 11, paddingVertical: 8, flexShrink: 0 },
   addProjectText: { fontSize: 12, fontWeight: '800' },
-  chips: { gap: 10, paddingRight: 18, paddingVertical: 3 },
-  projectChip: { width: 218, minHeight: 66, paddingHorizontal: 11, paddingVertical: 10, borderRadius: 17, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 9, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 2 },
-  repoIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  chips: { gap: 8, paddingRight: 14 },
+  projectChip: { width: 205, minHeight: 56, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 15, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 8, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 1 },
+  repoIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   projectChipText: { flex: 1, minWidth: 0 },
   projectChipTitle: { fontWeight: '800', fontSize: 14 },
   projectChipOwner: { fontSize: 11, marginTop: 3, fontWeight: '600' },
-  favoriteAction: { fontSize: 12, fontWeight: '700', alignSelf: 'flex-start', paddingVertical: 3 },
-  composer: { borderWidth: 1, borderRadius: 22, padding: 16, gap: 12, shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.05, shadowRadius: 14, elevation: 2 },
-  composerLabel: { fontSize: 17, fontWeight: '900' },
-  prompt: { minHeight: 118, maxHeight: 260, fontSize: 16, lineHeight: 24 },
+  favoriteAction: { fontSize: 11, fontWeight: '700', alignSelf: 'flex-start', paddingVertical: 1 },
+  composer: { borderWidth: 1, borderRadius: 19, padding: 14, gap: 9, shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 1 },
+  composerLabel: { fontSize: 16, fontWeight: '900' },
+  prompt: { minHeight: 76, maxHeight: 210, fontSize: 15, lineHeight: 22 },
   presetRow: { gap: 8 },
-  preset: { maxWidth: 210, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 16 },
-  primaryButton: { minHeight: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  primaryButtonText: { color: '#ffffff', fontSize: 17, fontWeight: '900' },
+  preset: { maxWidth: 190, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 15 },
+  primaryButton: { minHeight: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  primaryButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '900' },
   tabs: { flexDirection: 'row', gap: 4, padding: 4, borderRadius: 16 },
   tab: { flex: 1, minWidth: 0, minHeight: 42, flexDirection: 'row', gap: 5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5, borderRadius: 13 },
   tabCount: { minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
