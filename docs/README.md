@@ -24,6 +24,7 @@ Welcome to the documentation for the Jules Mobile Client. This directory contain
 - [Development Setup](guides/development.md)
 - [Troubleshooting](guides/troubleshooting.md)
 - [FAQ](guides/faq.md)
+- [Safari PWA Deployment](guides/pwa-deployment.md)
 
 ## 🤖 AI Agents
 If you are an AI agent contributing to this repository, please read the [AGENTS.md](../AGENTS.md) file in the repository root for comprehensive instructions.

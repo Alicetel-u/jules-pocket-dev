@@ -78,6 +78,16 @@ const translations = {
     repoHint: '💡 よく使うリポジトリは一番上に表示されるよ！',
     attachImages: '3. 画像を添付 (Images)',
     addImage: '画像を追加',
+    favoriteProjects: 'お気に入りのプロジェクト',
+    addProject: 'プロジェクトを追加',
+    removeFromFavorites: 'お気に入りから外す',
+    loadingProjects: 'プロジェクトを読み込み中…',
+    noFavoriteProjects: 'まず「プロジェクトを追加」から、よく使うリポジトリを登録してください。',
+    projectPickerHint: '追加したプロジェクトだけが、ホームに表示されます。',
+    searchProjects: 'リポジトリを検索…',
+    addToFavorites: 'お気に入りに追加',
+    alreadyFavorite: 'お気に入りに登録済み',
+    noMatchingProjects: '一致するリポジトリがありません。',
     
     // Session States
     stateActive: '処理中',
@@ -219,6 +229,16 @@ const translations = {
     repoHint: '💡 Your frequently used repos will appear at the top!',
     attachImages: '3. Attach Images',
     addImage: 'Add Image',
+    favoriteProjects: 'Favorite Projects',
+    addProject: 'Add Project',
+    removeFromFavorites: 'Remove from favorites',
+    loadingProjects: 'Loading projects…',
+    noFavoriteProjects: 'Use Add Project to register repositories you use often.',
+    projectPickerHint: 'Only projects you add are shown on the home screen.',
+    searchProjects: 'Search repositories…',
+    addToFavorites: 'Add to favorites',
+    alreadyFavorite: 'Already a favorite',
+    noMatchingProjects: 'No matching repositories found.',
     
     // Session States
     stateActive: 'Processing',

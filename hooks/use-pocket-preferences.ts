@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
-import * as SecureStore from 'expo-secure-store';
 import type { Source } from '@/constants/types';
+import { getStoredItem, setStoredItem } from '@/utils/key-value-storage';
 
 export interface PromptPreset {
   id: string;
@@ -23,7 +23,7 @@ export const DEFAULT_PROMPT_PRESETS: PromptPreset[] = [
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
   try {
-    const raw = await SecureStore.getItemAsync(key);
+    const raw = await getStoredItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
@@ -33,11 +33,11 @@ async function readJson<T>(key: string, fallback: T): Promise<T> {
 export function usePocketPreferences() {
   const getFavorites = useCallback(() => readJson<Source[]>(FAVORITES_KEY, []), []);
   const saveFavorites = useCallback(async (favorites: Source[]) => {
-    await SecureStore.setItemAsync(FAVORITES_KEY, JSON.stringify(favorites));
+    await setStoredItem(FAVORITES_KEY, JSON.stringify(favorites));
   }, []);
   const getPromptPresets = useCallback(() => readJson<PromptPreset[]>(PRESETS_KEY, DEFAULT_PROMPT_PRESETS), []);
   const savePromptPresets = useCallback(async (presets: PromptPreset[]) => {
-    await SecureStore.setItemAsync(PRESETS_KEY, JSON.stringify(presets));
+    await setStoredItem(PRESETS_KEY, JSON.stringify(presets));
   }, []);
 
   return { getFavorites, saveFavorites, getPromptPresets, savePromptPresets };

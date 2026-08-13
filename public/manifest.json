@@ -1,0 +1,17 @@
+{
+  "name": "Jules Pocket Dev",
+  "short_name": "Pocket Dev",
+  "description": "A mobile-first Jules workspace.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafbfe",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import { getStoredItem, setStoredItem } from '@/utils/key-value-storage';
 import { translations, type Language } from './i18n';
 
 type TranslationKey = keyof typeof translations.ja;
@@ -26,7 +26,7 @@ export function I18nProvider({ children }: I18nProviderProps) {
   useEffect(() => {
     const loadLanguage = async () => {
       try {
-        const savedLang = await SecureStore.getItemAsync(LANGUAGE_STORAGE_KEY);
+        const savedLang = await getStoredItem(LANGUAGE_STORAGE_KEY);
         if (savedLang === 'ja' || savedLang === 'en') {
           setLanguageState(savedLang);
         }
@@ -42,7 +42,7 @@ export function I18nProvider({ children }: I18nProviderProps) {
   const setLanguage = useCallback(async (lang: Language) => {
     setLanguageState(lang);
     try {
-      await SecureStore.setItemAsync(LANGUAGE_STORAGE_KEY, lang);
+      await setStoredItem(LANGUAGE_STORAGE_KEY, lang);
     } catch {
       // 無視
     }
