@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "jules-mobile-client",
-    "slug": "jules-mobile-client",
+    "name": "Jules Pocket Dev",
+    "slug": "jules-pocket-dev",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "julesmobileclient",
+    "scheme": "julespocketdev",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -21,7 +21,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
-      "package": "com.potetotown.julesmobileclient"
+      "package": "com.alicetel.julespocketdev"
     },
     "web": {
       "output": "static",
@@ -48,10 +48,10 @@
       "reactCompiler": true
     },
     "extra": {
-      "eas": {
-        "projectId": "92f0c32a-9eee-4018-8cab-190458195999"
+      "notifications": {
+        "enabled": false,
+        "note": "Reserved for a future Expo push-notification integration."
       }
-    },
-    "owner": "potetotown"
+    }
   }
 }
