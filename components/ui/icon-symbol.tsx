@@ -28,6 +28,7 @@ const MAPPING = {
   'xmark': 'close',
   'checkmark.circle.fill': 'check-circle',
   'xmark.circle.fill': 'cancel',
+  'trash': 'delete',
   'circle': 'radio-button-unchecked',
   
   // Content

@@ -89,6 +89,10 @@ const translations = {
     alreadyFavorite: 'お気に入りに登録済み',
     noMatchingProjects: '一致するリポジトリがありません。',
     
+    deleteTask: '削除',
+    deleteTaskTitle: 'タスクを削除しますか？',
+    deleteTaskMessage: 'このタスクはJulesから完全に削除されます。元に戻せません。',
+
     // Session States
     stateActive: '処理中',
     stateCompleted: '完了',
@@ -240,6 +244,10 @@ const translations = {
     alreadyFavorite: 'Already a favorite',
     noMatchingProjects: 'No matching repositories found.',
     
+    deleteTask: 'Delete',
+    deleteTaskTitle: 'Delete this task?',
+    deleteTaskMessage: 'This permanently removes the task from Jules and cannot be undone.',
+
     // Session States
     stateActive: 'Processing',
     stateCompleted: 'Completed',
