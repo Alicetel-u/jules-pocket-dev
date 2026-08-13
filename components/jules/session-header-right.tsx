@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Linking, Alert } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Linking, Alert } from 'react-native';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { isValidExternalLink } from '@/utils/url';
 
@@ -28,27 +28,9 @@ interface SessionHeaderRightProps {
   loadActivities: () => void;
 }
 
-export function SessionHeaderRight({ sessionState, sessionUrl, isDark, t, showExportMenu, loadActivities }: SessionHeaderRightProps) {
+export function SessionHeaderRight({ sessionUrl, isDark, t, showExportMenu, loadActivities }: SessionHeaderRightProps) {
   return (
     <View style={styles.headerRightContainer}>
-      {sessionState && (
-        <View style={[
-          styles.stateBadge,
-          sessionState === 'AWAITING_PLAN_APPROVAL' && styles.stateBadgeWarning,
-          sessionState === 'COMPLETED' && styles.stateBadgeSuccess,
-          sessionState === 'FAILED' && styles.stateBadgeError,
-          isDark && styles.stateBadgeDark,
-        ]}>
-          <Text style={[
-            styles.stateBadgeText,
-            sessionState === 'AWAITING_PLAN_APPROVAL' && styles.stateBadgeTextWarning,
-            sessionState === 'COMPLETED' && styles.stateBadgeTextSuccess,
-            sessionState === 'FAILED' && styles.stateBadgeTextError,
-          ]}>
-            {getSessionStateText(sessionState, t)}
-          </Text>
-        </View>
-      )}
       {sessionUrl && (
         <TouchableOpacity
           onPress={() => {

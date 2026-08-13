@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   FlatList,
   StyleSheet,
@@ -32,7 +31,6 @@ import { ErrorBanner } from '@/components/jules/error-banner';
 import { ApprovalBanner } from '@/components/jules/approval-banner';
 import { FeedbackBanner } from '@/components/jules/feedback-banner';
 import { SessionInput } from '@/components/jules/session-input';
-import { PrCard } from '@/components/jules/pr-card';
 import { Colors } from '@/constants/theme';
 
 export default function SessionDetailScreen() {
@@ -270,7 +268,7 @@ export default function SessionDetailScreen() {
     IN_PROGRESS:             { label: t('stateInProgress'),           color: '#2563eb', icon: 'arrow.clockwise' },
     AWAITING_PLAN_APPROVAL:  { label: t('stateAwaitingPlanApproval'), color: '#f59e0b', icon: 'hand.raised' },
     AWAITING_USER_FEEDBACK:  { label: t('stateAwaitingUserFeedback'), color: '#8b5cf6', icon: 'bubble.left' },
-    COMPLETED:               { label: t('stateCompleted'),            color: '#10b981', icon: 'checkmark.circle' },
+    COMPLETED:               { label: currentSubmittedPr ? t('statePublishing') : t('stateCompleted'), color: '#10b981', icon: 'checkmark.circle' },
     FAILED:                  { label: t('stateFailed'),               color: '#ef4444', icon: 'xmark.circle' },
     PAUSED:                  { label: t('statePaused'),               color: '#94a3b8', icon: 'pause.circle' },
   };
@@ -416,12 +414,8 @@ export default function SessionDetailScreen() {
                   >
                     <IconSymbol name="arrow.triangle.pull" size={18} color="#ffffff" />
                     <View style={{ flex: 1, marginLeft: 8 }}>
-                      <Text style={styles.prBannerTitle}>Pull Request Created!</Text>
-                      {typeof currentSubmittedPr !== 'string' && currentSubmittedPr?.title && (
-                        <Text style={styles.prBannerSubtitle} numberOfLines={1}>
-                          {currentSubmittedPr.title}
-                        </Text>
-                      )}
+                      <Text style={styles.prBannerTitle}>{t('prSubmittedTitle')}</Text>
+                      <Text style={styles.prBannerSubtitle} numberOfLines={1}>{t('prAutoPublishDetail')}</Text>
                     </View>
                     <IconSymbol name="chevron.right" size={14} color="rgba(255,255,255,0.7)" />
                   </LinearGradient>
@@ -465,7 +459,6 @@ export default function SessionDetailScreen() {
                     <IconSymbol name="arrow.clockwise" size={18} color={theme.primary} />
                   </View>
                 )}
-                <PrCard submittedPr={currentSubmittedPr} isDark={isDark} t={t} />
               </>
             }
           />
