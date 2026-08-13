@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApiKey } from '@/constants/api-key-context';
 import type { Session, Source } from '@/constants/types';
@@ -22,6 +23,14 @@ function groupFor(session: Session): TaskGroup {
 
 function sourceLabel(source: Source): string {
   return source.githubRepo ? `${source.githubRepo.owner}/${source.githubRepo.repo}` : source.displayName || source.name;
+}
+
+function sourceTitle(source: Source): string {
+  return source.githubRepo?.repo || source.displayName || source.name.replace(/^sources\//, '');
+}
+
+function sourceOwner(source: Source): string {
+  return source.githubRepo?.owner || 'Jules';
 }
 
 function stateLabel(session: Session): string {
@@ -75,6 +84,10 @@ export default function PocketHomeScreen() {
   }, [apiKey, fetchSessions]);
 
   const tasks = useMemo(() => sessions.filter((session) => groupFor(session) === group).sort((a, b) => Date.parse(b.updateTime) - Date.parse(a.updateTime)), [group, sessions]);
+  const taskCounts = useMemo(() => sessions.reduce<Record<TaskGroup, number>>((counts, session) => {
+    counts[groupFor(session)] += 1;
+    return counts;
+  }, { running: 0, waiting: 0, completed: 0 }), [sessions]);
   const selectedIsFavorite = !!selectedSource && favorites.some((source) => source.name === selectedSource.name);
   const availableProjects = useMemo(() => {
     const query = projectQuery.trim().toLowerCase();
@@ -146,12 +159,15 @@ export default function PocketHomeScreen() {
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}>
-        <View style={styles.header}><View><Text style={[styles.kicker, { color: colors.primary }]}>JULES POCKET DEV</Text><Text style={[styles.title, { color: colors.text }]}>今日は何を任せますか？</Text></View><TouchableOpacity onPress={() => void refresh()} style={[styles.refresh, { borderColor: colors.border }]}><Text style={{ color: colors.primary }}>更新</Text></TouchableOpacity></View>
+        <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+          <View style={styles.heroGlow} />
+          <View style={styles.header}><View style={styles.headerCopy}><Text style={styles.kicker}>JULES POCKET DEV</Text><Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.82} style={styles.title}>今日は何を任せますか？</Text><Text style={styles.heroSubtitle}>思いついたら、ここからすぐJulesへ。</Text></View><TouchableOpacity accessibilityRole="button" accessibilityLabel="更新" onPress={() => void refresh()} style={styles.refresh}><IconSymbol name="arrow.clockwise" size={18} color="#ffffff" /></TouchableOpacity></View>
+        </LinearGradient>
         {error ? <TouchableOpacity style={[styles.error, { backgroundColor: colors.error }]} onPress={clearError}><Text style={styles.errorText}>{error}</Text></TouchableOpacity> : null}
 
         <View style={styles.projectHeading}><Text style={[styles.sectionTitle, { color: colors.text }]}>{t('favoriteProjects')}</Text><TouchableOpacity accessibilityRole="button" accessibilityLabel={t('addProject')} onPress={() => setIsProjectPickerVisible(true)} style={[styles.addProjectButton, { backgroundColor: colors.surface, borderColor: colors.border }]}><IconSymbol name="plus" size={18} color={colors.primary} /><Text style={[styles.addProjectText, { color: colors.primary }]}>{t('addProject')}</Text></TouchableOpacity></View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          {favorites.map((source) => <TouchableOpacity key={source.name} onPress={() => setSelectedSource(source)} style={[styles.projectChip, { backgroundColor: selectedSource?.name === source.name ? colors.primary : colors.surface, borderColor: colors.border }]}><Text numberOfLines={1} style={{ color: selectedSource?.name === source.name ? '#fff' : colors.text, fontWeight: '700' }}>{sourceLabel(source)}</Text></TouchableOpacity>)}
+          {favorites.map((source) => { const selected = selectedSource?.name === source.name; return <TouchableOpacity accessibilityRole="button" accessibilityState={{ selected }} key={source.name} onPress={() => setSelectedSource(source)} style={[styles.projectChip, { backgroundColor: selected ? colors.primary : colors.surface, borderColor: selected ? colors.primary : colors.border, shadowColor: colors.primary }]}><View style={[styles.repoIcon, { backgroundColor: selected ? colors.primaryLight : colors.surfaceSecondary }]}><IconSymbol name="chevron.left.forwardslash.chevron.right" size={16} color={selected ? '#ffffff' : colors.primary} /></View><View style={styles.projectChipText}><Text numberOfLines={1} ellipsizeMode="middle" style={[styles.projectChipTitle, { color: selected ? '#ffffff' : colors.text }]}>{sourceTitle(source)}</Text><Text numberOfLines={1} ellipsizeMode="tail" style={[styles.projectChipOwner, { color: selected ? '#e0e7ff' : colors.icon }]}>{sourceOwner(source)}</Text></View>{selected ? <IconSymbol name="checkmark.circle.fill" size={17} color="#ffffff" /> : null}</TouchableOpacity>; })}
         </ScrollView>
         {selectedSource && selectedIsFavorite ? <TouchableOpacity onPress={() => void toggleFavorite(selectedSource)}><Text style={[styles.favoriteAction, { color: colors.primary }]}>{t('removeFromFavorites')}</Text></TouchableOpacity> : <Text style={[styles.hint, { color: colors.icon }]}>{isLoading ? t('loadingProjects') : favorites.length === 0 ? t('noFavoriteProjects') : t('projectPickerHint')}</Text>}
 
@@ -160,8 +176,8 @@ export default function PocketHomeScreen() {
           <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.primary, opacity: selectedSource && prompt.trim() ? 1 : 0.55 }]} disabled={!selectedSource || !prompt.trim() || isLoading} onPress={() => void sendToJules()}><Text style={styles.primaryButtonText}>{isLoading ? 'Julesに依頼中…' : 'Julesに任せる'}</Text></TouchableOpacity>
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>タスク状態</Text><View style={styles.tabs}>{([{ key: 'running', label: '実行中' }, { key: 'waiting', label: '確認待ち' }, { key: 'completed', label: '完了' }] as { key: TaskGroup; label: string }[]).map((tab) => <TouchableOpacity key={tab.key} onPress={() => setGroup(tab.key)} style={[styles.tab, group === tab.key && { borderBottomColor: colors.primary }]}><Text style={{ color: group === tab.key ? colors.primary : colors.icon, fontWeight: '700' }}>{tab.label}</Text></TouchableOpacity>)}</View>
-        {tasks.length === 0 ? <Text style={[styles.hint, { color: colors.icon }]}>この分類のタスクはありません。</Text> : tasks.map((task) => <TouchableOpacity key={task.name} onPress={() => openTask(task)} style={[styles.task, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.taskTop}><Text numberOfLines={1} style={[styles.taskTitle, { color: colors.text }]}>{task.title || 'Jules タスク'}</Text><View style={styles.taskActions}><Text style={{ color: group === 'waiting' ? colors.warning : group === 'completed' ? colors.success : colors.primary, fontWeight: '700', fontSize: 12 }}>{stateLabel(task)}</Text>{group === 'waiting' ? <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('deleteTask')} onPress={() => confirmDeleteTask(task)} hitSlop={8}><IconSymbol name="trash" size={18} color={colors.error} /></TouchableOpacity> : null}</View></View><Text numberOfLines={1} style={[styles.taskProject, { color: colors.icon }]}>{task.name.replace(/^sessions\//, '')}</Text><Text style={[styles.taskTime, { color: colors.icon }]}>開始 {formatTime(task.createTime)}　更新 {formatTime(task.updateTime)}</Text></TouchableOpacity>)}
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>タスク状態</Text><View style={[styles.tabs, { backgroundColor: colors.surfaceSecondary }]}>{([{ key: 'running', label: '実行中' }, { key: 'waiting', label: '確認待ち' }, { key: 'completed', label: '完了' }] as { key: TaskGroup; label: string }[]).map((tab) => { const selected = group === tab.key; return <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected }} key={tab.key} onPress={() => setGroup(tab.key)} style={[styles.tab, selected && { backgroundColor: colors.surface, shadowColor: colors.primary }]}><Text numberOfLines={1} style={{ color: selected ? colors.primary : colors.icon, fontWeight: '800', fontSize: 13 }}>{tab.label}</Text><View style={[styles.tabCount, { backgroundColor: selected ? colors.primary : colors.border }]}><Text style={styles.tabCountText}>{taskCounts[tab.key]}</Text></View></TouchableOpacity>; })}</View>
+        {tasks.length === 0 ? <View style={[styles.emptyTasks, { backgroundColor: colors.surface, borderColor: colors.border }]}><IconSymbol name="checkmark.circle.fill" size={28} color={colors.success} /><Text style={[styles.emptyTasksTitle, { color: colors.text }]}>ここは空です</Text><Text style={[styles.hint, { color: colors.icon }]}>この分類のタスクはありません。</Text></View> : tasks.map((task) => <View key={task.name} style={[styles.task, { backgroundColor: colors.surface, borderColor: colors.border, shadowColor: colors.primary }]}><TouchableOpacity accessibilityRole="button" onPress={() => openTask(task)} style={styles.taskMain}><View style={styles.taskTop}><Text numberOfLines={2} ellipsizeMode="tail" style={[styles.taskTitle, { color: colors.text }]}>{task.title || 'Jules タスク'}</Text><View style={[styles.stateBadge, { backgroundColor: group === 'waiting' ? `${colors.warning}1F` : group === 'completed' ? `${colors.success}1F` : `${colors.primary}1F` }]}><Text numberOfLines={1} style={{ color: group === 'waiting' ? colors.warning : group === 'completed' ? colors.success : colors.primary, fontWeight: '800', fontSize: 11 }}>{stateLabel(task)}</Text></View></View><Text numberOfLines={1} ellipsizeMode="middle" style={[styles.taskProject, { color: colors.icon }]}>{task.name.replace(/^sessions\//, '')}</Text><View style={styles.taskFooter}><Text numberOfLines={1} style={[styles.taskTime, { color: colors.icon }]}>更新 {formatTime(task.updateTime)}</Text><IconSymbol name="chevron.right" size={17} color={colors.icon} /></View></TouchableOpacity>{group === 'waiting' ? <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('deleteTask')} onPress={() => confirmDeleteTask(task)} style={[styles.deleteTaskButton, { borderTopColor: colors.border }]}><IconSymbol name="trash" size={17} color={colors.error} /><Text style={{ color: colors.error, fontWeight: '700', fontSize: 13 }}>{t('deleteTask')}</Text></TouchableOpacity> : null}</View>)}
       </ScrollView>
       <Modal visible={isProjectPickerVisible} animationType="slide" transparent onRequestClose={() => setIsProjectPickerVisible(false)}>
         <View style={styles.modalBackdrop}>
@@ -170,7 +186,7 @@ export default function PocketHomeScreen() {
             <Text style={[styles.hint, { color: colors.icon }]}>{t('projectPickerHint')}</Text>
             <TextInput value={projectQuery} onChangeText={setProjectQuery} placeholder={t('searchProjects')} placeholderTextColor={colors.icon} autoCapitalize="none" autoCorrect={false} style={[styles.projectSearch, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]} accessibilityLabel={t('searchProjects')} />
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.projectList}>
-              {availableProjects.map((source) => { const isFavorite = favorites.some((favorite) => favorite.name === source.name); return <TouchableOpacity key={source.name} accessibilityRole="button" onPress={() => void addFavorite(source)} style={[styles.projectRow, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.projectRowText}><Text numberOfLines={1} style={[styles.projectName, { color: colors.text }]}>{sourceLabel(source)}</Text><Text style={[styles.projectStatus, { color: colors.icon }]}>{isFavorite ? t('alreadyFavorite') : t('addToFavorites')}</Text></View><IconSymbol name={isFavorite ? 'checkmark.circle.fill' : 'plus'} size={22} color={isFavorite ? colors.success : colors.primary} /></TouchableOpacity>; })}
+              {availableProjects.map((source) => { const isFavorite = favorites.some((favorite) => favorite.name === source.name); return <TouchableOpacity key={source.name} accessibilityRole="button" onPress={() => void addFavorite(source)} style={[styles.projectRow, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={[styles.repoIcon, { backgroundColor: colors.surfaceSecondary }]}><IconSymbol name="chevron.left.forwardslash.chevron.right" size={17} color={colors.primary} /></View><View style={styles.projectRowText}><Text numberOfLines={2} ellipsizeMode="middle" style={[styles.projectName, { color: colors.text }]}>{sourceTitle(source)}</Text><Text numberOfLines={1} ellipsizeMode="tail" style={[styles.projectStatus, { color: colors.icon }]}>{sourceOwner(source)} · {isFavorite ? t('alreadyFavorite') : t('addToFavorites')}</Text></View><IconSymbol name={isFavorite ? 'checkmark.circle.fill' : 'plus'} size={22} color={isFavorite ? colors.success : colors.primary} /></TouchableOpacity>; })}
               {availableProjects.length === 0 ? <Text style={[styles.hint, { color: colors.icon }]}>{t('noMatchingProjects')}</Text> : null}
             </ScrollView>
           </View>
@@ -181,5 +197,64 @@ export default function PocketHomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 }, content: { padding: 18, paddingBottom: 36, gap: 14 }, header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, kicker: { fontWeight: '800', fontSize: 11, letterSpacing: 1.3 }, title: { fontSize: 25, fontWeight: '800', marginTop: 4 }, refresh: { paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderRadius: 18 }, projectHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }, sectionTitle: { fontSize: 17, fontWeight: '800' }, addProjectButton: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 7 }, addProjectText: { fontSize: 13, fontWeight: '800' }, chips: { gap: 8, paddingRight: 18 }, projectChip: { maxWidth: 220, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 13, borderWidth: 1 }, favoriteAction: { fontSize: 13, fontWeight: '700' }, composer: { borderWidth: 1, borderRadius: 18, padding: 15, gap: 12 }, composerLabel: { fontSize: 16, fontWeight: '800' }, prompt: { minHeight: 125, fontSize: 16, lineHeight: 24 }, presetRow: { gap: 8 }, preset: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 16 }, primaryButton: { minHeight: 54, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, primaryButtonText: { color: '#fff', fontSize: 17, fontWeight: '800' }, tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#cbd5e1' }, tab: { flex: 1, alignItems: 'center', paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: 'transparent' }, task: { borderWidth: 1, borderRadius: 15, padding: 14, gap: 7 }, taskTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 }, taskActions: { flexDirection: 'row', alignItems: 'center', gap: 10 }, taskTitle: { flex: 1, fontWeight: '800', fontSize: 16 }, taskProject: { fontSize: 12 }, taskTime: { fontSize: 12 }, hint: { fontSize: 13, lineHeight: 20 }, error: { borderRadius: 12, padding: 12 }, errorText: { color: '#fff', fontWeight: '700' }, empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 16 }, emptyTitle: { fontSize: 26, fontWeight: '800' }, emptyText: { textAlign: 'center', lineHeight: 22 }, modalBackdrop: { flex: 1, justifyContent: 'flex-end' }, projectPicker: { maxHeight: '82%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 14 }, pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, pickerTitle: { fontSize: 20, fontWeight: '800' }, closeButton: { padding: 6 }, projectSearch: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 }, projectList: { gap: 8, paddingBottom: 16 }, projectRow: { borderWidth: 1, borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }, projectRowText: { flex: 1, gap: 4 }, projectName: { fontSize: 16, fontWeight: '700' }, projectStatus: { fontSize: 13 },
+  screen: { flex: 1 },
+  content: { width: '100%', maxWidth: 680, alignSelf: 'center', padding: 16, paddingBottom: 42, gap: 15 },
+  hero: { borderRadius: 24, padding: 20, overflow: 'hidden', minHeight: 146, justifyContent: 'center' },
+  heroGlow: { position: 'absolute', width: 170, height: 170, borderRadius: 85, backgroundColor: 'rgba(255,255,255,0.13)', right: -45, top: -70 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  headerCopy: { flex: 1, minWidth: 0 },
+  kicker: { color: '#ffffff', fontWeight: '900', fontSize: 10, letterSpacing: 1.6, opacity: 0.84 },
+  title: { color: '#ffffff', fontSize: 27, lineHeight: 34, fontWeight: '900', marginTop: 8, letterSpacing: -0.7 },
+  heroSubtitle: { color: '#eef2ff', fontSize: 13, marginTop: 8, fontWeight: '600' },
+  refresh: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.18)' },
+  projectHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 4 },
+  sectionTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.25, flexShrink: 1 },
+  addProjectButton: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 18, paddingHorizontal: 11, paddingVertical: 8, flexShrink: 0 },
+  addProjectText: { fontSize: 12, fontWeight: '800' },
+  chips: { gap: 10, paddingRight: 18, paddingVertical: 3 },
+  projectChip: { width: 218, minHeight: 66, paddingHorizontal: 11, paddingVertical: 10, borderRadius: 17, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 9, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 2 },
+  repoIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  projectChipText: { flex: 1, minWidth: 0 },
+  projectChipTitle: { fontWeight: '850', fontSize: 14 },
+  projectChipOwner: { fontSize: 11, marginTop: 3, fontWeight: '600' },
+  favoriteAction: { fontSize: 12, fontWeight: '700', alignSelf: 'flex-start', paddingVertical: 3 },
+  composer: { borderWidth: 1, borderRadius: 22, padding: 16, gap: 12, shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.05, shadowRadius: 14, elevation: 2 },
+  composerLabel: { fontSize: 17, fontWeight: '900' },
+  prompt: { minHeight: 118, maxHeight: 260, fontSize: 16, lineHeight: 24 },
+  presetRow: { gap: 8 },
+  preset: { maxWidth: 210, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 16 },
+  primaryButton: { minHeight: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  primaryButtonText: { color: '#ffffff', fontSize: 17, fontWeight: '900' },
+  tabs: { flexDirection: 'row', gap: 4, padding: 4, borderRadius: 16 },
+  tab: { flex: 1, minWidth: 0, minHeight: 42, flexDirection: 'row', gap: 5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5, borderRadius: 13 },
+  tabCount: { minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  tabCountText: { color: '#ffffff', fontSize: 10, fontWeight: '900' },
+  task: { borderWidth: 1, borderRadius: 18, overflow: 'hidden', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: 9, elevation: 2 },
+  taskMain: { padding: 15, gap: 8 },
+  taskTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  stateBadge: { maxWidth: 116, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 12, flexShrink: 0 },
+  taskTitle: { flex: 1, minWidth: 0, fontWeight: '850', fontSize: 15, lineHeight: 21 },
+  taskProject: { fontSize: 11, fontFamily: 'monospace' },
+  taskFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  taskTime: { fontSize: 11, flexShrink: 1 },
+  deleteTaskButton: { borderTopWidth: 1, minHeight: 42, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center' },
+  emptyTasks: { borderWidth: 1, borderRadius: 18, alignItems: 'center', padding: 24, gap: 5 },
+  emptyTasksTitle: { fontSize: 15, fontWeight: '800' },
+  hint: { fontSize: 13, lineHeight: 20, flexShrink: 1 },
+  error: { borderRadius: 14, padding: 13 },
+  errorText: { color: '#ffffff', fontWeight: '700' },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 16 },
+  emptyTitle: { fontSize: 26, fontWeight: '800', textAlign: 'center' },
+  emptyText: { textAlign: 'center', lineHeight: 22 },
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(2,6,23,0.52)' },
+  projectPicker: { width: '100%', maxWidth: 680, alignSelf: 'center', maxHeight: '86%', borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 20, gap: 14 },
+  pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  pickerTitle: { fontSize: 21, fontWeight: '900', flexShrink: 1 },
+  closeButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  projectSearch: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
+  projectList: { gap: 9, paddingBottom: 20 },
+  projectRow: { minHeight: 70, borderWidth: 1, borderRadius: 16, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  projectRowText: { flex: 1, minWidth: 0, gap: 4 },
+  projectName: { fontSize: 15, lineHeight: 20, fontWeight: '800' },
+  projectStatus: { fontSize: 12 },
 });

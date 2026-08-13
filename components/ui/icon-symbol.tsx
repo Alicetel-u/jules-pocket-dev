@@ -20,6 +20,7 @@ const MAPPING = {
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
   'chevron.down': 'keyboard-arrow-down',
+  'chevron.up': 'keyboard-arrow-up',
   'chevron.left': 'chevron-left',
   'arrow.clockwise': 'refresh',
   
@@ -29,6 +30,7 @@ const MAPPING = {
   'checkmark.circle.fill': 'check-circle',
   'xmark.circle.fill': 'cancel',
   'trash': 'delete',
+  'trash.fill': 'delete',
   'circle': 'radio-button-unchecked',
   
   // Content
@@ -45,6 +47,8 @@ const MAPPING = {
   'questionmark.circle': 'help',
   'clock': 'history',
   'clock.fill': 'schedule',
+  'magnifyingglass': 'search',
+  'folder': 'folder',
   
   // Theme
   'sun.max.fill': 'light-mode',
