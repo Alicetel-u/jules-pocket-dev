@@ -81,7 +81,7 @@ export function useJulesSessions({ julesFetch, translate, setIsLoading, setError
 
   // Delete session
   const deleteSession = useCallback(
-    async (sessionName: string): Promise<boolean> => {
+    async (sessionName: string): Promise<{ deleted: boolean; error?: string }> => {
       setIsLoading(true);
       setError(null);
       try {
@@ -91,11 +91,11 @@ export function useJulesSessions({ julesFetch, translate, setIsLoading, setError
 
         // Remove from local state
         setSessions((prev) => prev.filter((s) => s.name !== sessionName));
-        return true;
+        return { deleted: true };
       } catch (err) {
-        const message = err instanceof Error ? err.message : translate('deleteSessionFailed', 'Failed to delete session');
+        const message = err instanceof Error ? err.message : translate('error', 'Failed to delete session');
         setError(message);
-        return false;
+        return { deleted: false, error: message };
       } finally {
         setIsLoading(false);
       }

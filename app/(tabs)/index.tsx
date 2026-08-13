@@ -152,13 +152,13 @@ export default function PocketHomeScreen() {
     if (!deleteCandidate || isDeletingTask) return;
     setIsDeletingTask(true);
     setDeleteTaskError(null);
-    const deleted = await deleteSession(deleteCandidate.name);
-    if (deleted) {
+    const result = await deleteSession(deleteCandidate.name);
+    if (result.deleted) {
       setDeletedSessionNames((current) => new Set(current).add(deleteCandidate.name));
       setDeleteCandidate(null);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
-      setDeleteTaskError('削除できませんでした。下のエラー内容を確認して、もう一度お試しください。');
+      setDeleteTaskError(result.error || '削除できませんでした。もう一度お試しください。');
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
     setIsDeletingTask(false);
@@ -211,7 +211,7 @@ export default function PocketHomeScreen() {
             <Text style={[styles.confirmTitle, { color: colors.text }]}>{t('deleteTaskTitle')}</Text>
             <Text style={[styles.confirmMessage, { color: colors.icon }]}>{t('deleteTaskMessage')}</Text>
             <Text numberOfLines={2} style={[styles.confirmTaskName, { color: colors.text, backgroundColor: colors.surfaceSecondary }]}>{deleteCandidate?.title || 'Jules タスク'}</Text>
-            {deleteTaskError || error ? <View style={[styles.confirmError, { backgroundColor: `${colors.error}17` }]}><Text selectable style={[styles.confirmErrorText, { color: colors.error }]}>{error || deleteTaskError}</Text></View> : null}
+            {deleteTaskError ? <View style={[styles.confirmError, { backgroundColor: `${colors.error}17` }]}><Text selectable style={[styles.confirmErrorText, { color: colors.error }]}>{deleteTaskError}</Text></View> : null}
             <View style={styles.confirmActions}>
               <TouchableOpacity accessibilityRole="button" disabled={isDeletingTask} onPress={() => setDeleteCandidate(null)} style={[styles.confirmButton, { borderColor: colors.border }]}><Text style={{ color: colors.text, fontWeight: '800' }}>{t('cancel')}</Text></TouchableOpacity>
               <TouchableOpacity accessibilityRole="button" disabled={isDeletingTask} onPress={() => void deleteSelectedTask()} style={[styles.confirmButton, { backgroundColor: colors.error, opacity: isDeletingTask ? 0.6 : 1 }]}><Text style={styles.confirmDeleteText}>{isDeletingTask ? t('processing') : t('deleteTask')}</Text></TouchableOpacity>
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
   projectChip: { width: 218, minHeight: 66, paddingHorizontal: 11, paddingVertical: 10, borderRadius: 17, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 9, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 2 },
   repoIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   projectChipText: { flex: 1, minWidth: 0 },
-  projectChipTitle: { fontWeight: '850', fontSize: 14 },
+  projectChipTitle: { fontWeight: '800', fontSize: 14 },
   projectChipOwner: { fontSize: 11, marginTop: 3, fontWeight: '600' },
   favoriteAction: { fontSize: 12, fontWeight: '700', alignSelf: 'flex-start', paddingVertical: 3 },
   composer: { borderWidth: 1, borderRadius: 22, padding: 16, gap: 12, shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.05, shadowRadius: 14, elevation: 2 },
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
   taskMain: { padding: 15, gap: 8 },
   taskTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   stateBadge: { maxWidth: 116, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 12, flexShrink: 0 },
-  taskTitle: { flex: 1, minWidth: 0, fontWeight: '850', fontSize: 15, lineHeight: 21 },
+  taskTitle: { flex: 1, minWidth: 0, fontWeight: '800', fontSize: 15, lineHeight: 21 },
   taskProject: { fontSize: 11, fontFamily: 'monospace' },
   taskFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   taskTime: { fontSize: 11, flexShrink: 1 },
