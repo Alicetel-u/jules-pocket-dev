@@ -62,6 +62,8 @@ export default function PocketHomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isProjectPickerVisible, setIsProjectPickerVisible] = useState(false);
   const [projectQuery, setProjectQuery] = useState('');
+  const [deleteCandidate, setDeleteCandidate] = useState<Session | null>(null);
+  const [isDeletingTask, setIsDeletingTask] = useState(false);
   const { sources, sessions, isLoading, error, clearError, syncAllSources, fetchSessions, createSession, deleteSession } = useJulesApi({ apiKey });
 
   const load = useCallback(async () => {
@@ -138,19 +140,22 @@ export default function PocketHomeScreen() {
   }, []);
 
   const confirmDeleteTask = useCallback((session: Session) => {
-    Alert.alert(t('deleteTaskTitle'), t('deleteTaskMessage'), [
-      { text: t('cancel'), style: 'cancel' },
-      {
-        text: t('deleteTask'),
-        style: 'destructive',
-        onPress: () => {
-          void deleteSession(session.name).then((deleted) => {
-            if (deleted) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          });
-        },
-      },
-    ]);
-  }, [deleteSession, t]);
+    setDeleteCandidate(session);
+  }, []);
+
+  const deleteSelectedTask = useCallback(async () => {
+    if (!deleteCandidate || isDeletingTask) return;
+    setIsDeletingTask(true);
+    const deleted = await deleteSession(deleteCandidate.name);
+    if (deleted) {
+      setDeleteCandidate(null);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await fetchSessions(true);
+    } else {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+    setIsDeletingTask(false);
+  }, [deleteCandidate, deleteSession, fetchSessions, isDeletingTask]);
 
   if (!apiKey) {
     return <SafeAreaView style={[styles.empty, { backgroundColor: colors.background }]}><Text style={[styles.emptyTitle, { color: colors.text }]}>Jules Pocket Dev</Text><Text style={[styles.emptyText, { color: colors.icon }]}>はじめに Jules API キーを設定してください。</Text><TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.primary }]} onPress={() => router.push('/settings')}><Text style={styles.primaryButtonText}>設定を開く</Text></TouchableOpacity></SafeAreaView>;
@@ -189,6 +194,20 @@ export default function PocketHomeScreen() {
               {availableProjects.map((source) => { const isFavorite = favorites.some((favorite) => favorite.name === source.name); return <TouchableOpacity key={source.name} accessibilityRole="button" onPress={() => void addFavorite(source)} style={[styles.projectRow, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={[styles.repoIcon, { backgroundColor: colors.surfaceSecondary }]}><IconSymbol name="chevron.left.forwardslash.chevron.right" size={17} color={colors.primary} /></View><View style={styles.projectRowText}><Text numberOfLines={2} ellipsizeMode="middle" style={[styles.projectName, { color: colors.text }]}>{sourceTitle(source)}</Text><Text numberOfLines={1} ellipsizeMode="tail" style={[styles.projectStatus, { color: colors.icon }]}>{sourceOwner(source)} · {isFavorite ? t('alreadyFavorite') : t('addToFavorites')}</Text></View><IconSymbol name={isFavorite ? 'checkmark.circle.fill' : 'plus'} size={22} color={isFavorite ? colors.success : colors.primary} /></TouchableOpacity>; })}
               {availableProjects.length === 0 ? <Text style={[styles.hint, { color: colors.icon }]}>{t('noMatchingProjects')}</Text> : null}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={deleteCandidate !== null} animationType="fade" transparent onRequestClose={() => { if (!isDeletingTask) setDeleteCandidate(null); }}>
+        <View style={styles.confirmBackdrop}>
+          <View style={[styles.confirmCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.confirmIcon, { backgroundColor: `${colors.error}1F` }]}><IconSymbol name="trash" size={24} color={colors.error} /></View>
+            <Text style={[styles.confirmTitle, { color: colors.text }]}>{t('deleteTaskTitle')}</Text>
+            <Text style={[styles.confirmMessage, { color: colors.icon }]}>{t('deleteTaskMessage')}</Text>
+            <Text numberOfLines={2} style={[styles.confirmTaskName, { color: colors.text, backgroundColor: colors.surfaceSecondary }]}>{deleteCandidate?.title || 'Jules タスク'}</Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity accessibilityRole="button" disabled={isDeletingTask} onPress={() => setDeleteCandidate(null)} style={[styles.confirmButton, { borderColor: colors.border }]}><Text style={{ color: colors.text, fontWeight: '800' }}>{t('cancel')}</Text></TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button" disabled={isDeletingTask} onPress={() => void deleteSelectedTask()} style={[styles.confirmButton, { backgroundColor: colors.error, opacity: isDeletingTask ? 0.6 : 1 }]}><Text style={styles.confirmDeleteText}>{isDeletingTask ? t('processing') : t('deleteTask')}</Text></TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -257,4 +276,13 @@ const styles = StyleSheet.create({
   projectRowText: { flex: 1, minWidth: 0, gap: 4 },
   projectName: { fontSize: 15, lineHeight: 20, fontWeight: '800' },
   projectStatus: { fontSize: 12 },
+  confirmBackdrop: { flex: 1, backgroundColor: 'rgba(2,6,23,0.62)', alignItems: 'center', justifyContent: 'center', padding: 22 },
+  confirmCard: { width: '100%', maxWidth: 390, borderWidth: 1, borderRadius: 24, padding: 22, alignItems: 'center', gap: 11, shadowColor: '#000000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.22, shadowRadius: 24, elevation: 10 },
+  confirmIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  confirmTitle: { fontSize: 19, fontWeight: '900', textAlign: 'center' },
+  confirmMessage: { fontSize: 13, lineHeight: 20, textAlign: 'center' },
+  confirmTaskName: { width: '100%', borderRadius: 12, padding: 11, fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  confirmActions: { width: '100%', flexDirection: 'row', gap: 10, marginTop: 5 },
+  confirmButton: { flex: 1, minHeight: 48, borderWidth: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  confirmDeleteText: { color: '#ffffff', fontWeight: '900' },
 });
