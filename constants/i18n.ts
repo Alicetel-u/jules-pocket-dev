@@ -36,6 +36,7 @@ const translations = {
     
     // Session Detail
     noActivities: 'アクティビティがないよ',
+    sessionPreparing: 'Julesがタスクを準備しています…',
     replyPlaceholder: 'Julesに返信...',
     planSummary: 'Plan Summary',
     toolLabel: 'Tool',
@@ -191,6 +192,7 @@ const translations = {
     
     // Session Detail
     noActivities: 'No activities',
+    sessionPreparing: 'Jules is preparing this task…',
     replyPlaceholder: 'Reply to Jules...',
     planSummary: 'Plan Summary',
     toolLabel: 'Tool',

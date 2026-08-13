@@ -70,10 +70,10 @@ export function useJulesSessions({ julesFetch, translate, setIsLoading, setError
     try {
       const session = await julesFetch<Session>(`/${sessionName}`);
       return session;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : translate('fetchSessionFailed', 'Failed to fetch session');
-      setError(message);
-      return null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : translate('fetchSessionFailed', 'Failed to fetch session');
+        if (!silent) setError(message);
+        return null;
     } finally {
       if (!silent) setIsLoading(false);
     }
@@ -94,6 +94,13 @@ export function useJulesSessions({ julesFetch, translate, setIsLoading, setError
         return { deleted: true };
       } catch (err) {
         const message = err instanceof Error ? err.message : translate('error', 'Failed to delete session');
+        if (/requested entity was not found|not found/i.test(message)) {
+          // Jules may keep a stale session in list results briefly after the
+          // underlying entity is gone. In that case deletion is already done.
+          setSessions((prev) => prev.filter((s) => s.name !== sessionName));
+          setError(null);
+          return { deleted: true };
+        }
         setError(message);
         return { deleted: false, error: message };
       } finally {
@@ -144,7 +151,7 @@ export function useJulesSessions({ julesFetch, translate, setIsLoading, setError
         return sorted;
       } catch (err) {
         const message = err instanceof Error ? err.message : translate('fetchActivitiesFailed', 'Failed to fetch chat history...');
-        setError(message);
+        if (!silent) setError(message);
         return [];
       } finally {
         if (!silent) setIsLoading(false);

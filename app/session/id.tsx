@@ -165,7 +165,9 @@ export default function SessionDetailScreen() {
 
   const loadActivities = useCallback(async () => {
     if (!id) return;
-    const data = await fetchActivities(id);
+    // A newly created Jules session can exist before its activities collection
+    // is ready. Retry through polling without showing a misleading 404 banner.
+    const data = await fetchActivities(id, true);
     setActivities(data);
 
     // 最下部にスクロール
@@ -393,7 +395,7 @@ export default function SessionDetailScreen() {
               <View style={styles.emptyContainer}>
                 <IconSymbol name="bubble.left.and.bubble.right" size={48} color={isDark ? '#475569' : '#94a3b8'} />
                 <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
-                  {t('noActivities')}
+                  {sessionState === 'QUEUED' || sessionState === 'PLANNING' ? t('sessionPreparing') : t('noActivities')}
                 </Text>
               </View>
             }

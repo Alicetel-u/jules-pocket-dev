@@ -53,7 +53,7 @@ export default function PocketHomeScreen() {
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
   const { t } = useI18n();
-  const { getFavorites, saveFavorites, getPromptPresets } = usePocketPreferences();
+  const { getFavorites, saveFavorites, getPromptPresets, getDismissedSessions, saveDismissedSessions } = usePocketPreferences();
   const [favorites, setFavorites] = useState<Source[]>([]);
   const [presets, setPresets] = useState<PromptPreset[]>([]);
   const [selectedSource, setSelectedSource] = useState<Source | null>(null);
@@ -70,15 +70,16 @@ export default function PocketHomeScreen() {
 
   const load = useCallback(async () => {
     if (!apiKey) return;
-    const [savedFavorites, loadedPresets] = await Promise.all([getFavorites(), getPromptPresets()]);
+    const [savedFavorites, loadedPresets, dismissedSessions] = await Promise.all([getFavorites(), getPromptPresets(), getDismissedSessions()]);
     setFavorites(savedFavorites);
     setPresets(loadedPresets);
+    setDeletedSessionNames(new Set(dismissedSessions));
     const freshSources = await syncAllSources();
     const stillAvailable = savedFavorites.filter((favorite) => freshSources.some((source) => source.name === favorite.name));
     setFavorites(stillAvailable);
     if (!selectedSource && stillAvailable[0]) setSelectedSource(stillAvailable[0]);
     await fetchSessions(true);
-  }, [apiKey, fetchSessions, getFavorites, getPromptPresets, selectedSource, syncAllSources]);
+  }, [apiKey, fetchSessions, getDismissedSessions, getFavorites, getPromptPresets, selectedSource, syncAllSources]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
@@ -154,7 +155,9 @@ export default function PocketHomeScreen() {
     setDeleteTaskError(null);
     const result = await deleteSession(deleteCandidate.name);
     if (result.deleted) {
-      setDeletedSessionNames((current) => new Set(current).add(deleteCandidate.name));
+      const nextDeletedSessionNames = new Set(deletedSessionNames).add(deleteCandidate.name);
+      setDeletedSessionNames(nextDeletedSessionNames);
+      await saveDismissedSessions([...nextDeletedSessionNames]);
       setDeleteCandidate(null);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
@@ -162,7 +165,7 @@ export default function PocketHomeScreen() {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
     setIsDeletingTask(false);
-  }, [deleteCandidate, deleteSession, isDeletingTask]);
+  }, [deleteCandidate, deletedSessionNames, deleteSession, isDeletingTask, saveDismissedSessions]);
 
   if (!apiKey) {
     return <SafeAreaView style={[styles.empty, { backgroundColor: colors.background }]}><Text style={[styles.emptyTitle, { color: colors.text }]}>Jules Pocket Dev</Text><Text style={[styles.emptyText, { color: colors.icon }]}>はじめに Jules API キーを設定してください。</Text><TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.primary }]} onPress={() => router.push('/settings')}><Text style={styles.primaryButtonText}>設定を開く</Text></TouchableOpacity></SafeAreaView>;
