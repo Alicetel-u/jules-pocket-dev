@@ -17,7 +17,7 @@ export default function RootHtml({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Pocket Dev" />
         <link rel="manifest" href={`${baseUrl}manifest.json`} />
-        <link rel="apple-touch-icon" href={`${baseUrl}favicon.ico`} />
+        <link rel="apple-touch-icon" sizes="180x180" href={`${baseUrl}apple-touch-icon.png`} />
         <ScrollViewStyleReset />
       </head>
       <body>{children}</body>

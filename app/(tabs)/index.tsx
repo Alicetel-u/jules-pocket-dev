@@ -8,11 +8,12 @@ import type { Session, Source } from '@/constants/types';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useJulesApi } from '@/hooks/use-jules-api';
-import { usePocketPreferences, type PromptPreset } from '@/hooks/use-pocket-preferences';
+import { usePocketPreferences } from '@/hooks/use-pocket-preferences';
 import { useI18n } from '@/constants/i18n-context';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 type TaskGroup = 'running' | 'waiting' | 'completed';
+type TaskMode = 'build' | 'debug' | 'check';
 
 function groupFor(session: Session): TaskGroup {
   if (session.state === 'COMPLETED' || session.state === 'FAILED') return 'completed';
@@ -52,11 +53,18 @@ export default function PocketHomeScreen() {
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
   const { t } = useI18n();
-  const { getFavorites, saveFavorites, getPromptPresets, getDismissedSessions, saveDismissedSessions } = usePocketPreferences();
+  const { getFavorites, saveFavorites, getDismissedSessions, saveDismissedSessions } = usePocketPreferences();
   const [favorites, setFavorites] = useState<Source[]>([]);
-  const [presets, setPresets] = useState<PromptPreset[]>([]);
   const [selectedSource, setSelectedSource] = useState<Source | null>(null);
   const [prompt, setPrompt] = useState('');
+  const [taskMode, setTaskMode] = useState<TaskMode | null>(null);
+  const [bugAction, setBugAction] = useState('');
+  const [bugActual, setBugActual] = useState('');
+  const [bugExpected, setBugExpected] = useState('');
+  const [bugFrequency, setBugFrequency] = useState('毎回');
+  const [protectedAreas, setProtectedAreas] = useState('既存機能と既存デザインを壊さない');
+  const [doneCriteria, setDoneCriteria] = useState('Web版をビルドし、スマホ表示で問題がないことを確認する');
+  const [checkItems, setCheckItems] = useState(() => new Set(['build', 'mobile', 'text', 'errors']));
   const [group, setGroup] = useState<TaskGroup>('running');
   const [refreshing, setRefreshing] = useState(false);
   const [isProjectPickerVisible, setIsProjectPickerVisible] = useState(false);
@@ -69,16 +77,15 @@ export default function PocketHomeScreen() {
 
   const load = useCallback(async () => {
     if (!apiKey) return;
-    const [savedFavorites, loadedPresets, dismissedSessions] = await Promise.all([getFavorites(), getPromptPresets(), getDismissedSessions()]);
+    const [savedFavorites, dismissedSessions] = await Promise.all([getFavorites(), getDismissedSessions()]);
     setFavorites(savedFavorites);
-    setPresets(loadedPresets);
     setDeletedSessionNames(new Set(dismissedSessions));
     const freshSources = await syncAllSources();
     const stillAvailable = savedFavorites.filter((favorite) => freshSources.some((source) => source.name === favorite.name));
     setFavorites(stillAvailable);
     if (!selectedSource && stillAvailable[0]) setSelectedSource(stillAvailable[0]);
     await fetchSessions(true);
-  }, [apiKey, fetchSessions, getDismissedSessions, getFavorites, getPromptPresets, selectedSource, syncAllSources]);
+  }, [apiKey, fetchSessions, getDismissedSessions, getFavorites, selectedSource, syncAllSources]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
@@ -89,7 +96,7 @@ export default function PocketHomeScreen() {
 
   const visibleSessions = useMemo(() => sessions.filter((session) => !deletedSessionNames.has(session.name)), [deletedSessionNames, sessions]);
   const tasks = useMemo(() => visibleSessions.filter((session) => groupFor(session) === group).sort((a, b) => Date.parse(b.updateTime) - Date.parse(a.updateTime)), [group, visibleSessions]);
-  const taskCounts = useMemo(() => sessions.reduce<Record<TaskGroup, number>>((counts, session) => {
+  const taskCounts = useMemo(() => visibleSessions.reduce<Record<TaskGroup, number>>((counts, session) => {
     counts[groupFor(session)] += 1;
     return counts;
   }, { running: 0, waiting: 0, completed: 0 }), [visibleSessions]);
@@ -126,17 +133,25 @@ export default function PocketHomeScreen() {
   }, [favorites, saveFavorites]);
 
   const sendToJules = useCallback(async () => {
-    if (!selectedSource || !prompt.trim()) {
-      Alert.alert('プロジェクトと指示を選んでください');
+    const checkLabels: Record<string, string> = { build: '起動・ビルド', mobile: 'スマホ表示', text: '文字化け・見切れ・未翻訳', errors: 'エラー処理', security: 'セキュリティ', performance: '処理速度', quality: 'コード品質' };
+    const finalPrompt = taskMode === 'debug'
+      ? `次の不具合を調査し、原因を特定して修正してください。\n\n【操作】\n${bugAction}\n\n【実際に起きたこと】\n${bugActual}\n\n【本来の動作】\n${bugExpected}\n\n【発生頻度】\n${bugFrequency}\n\n変更は必要最小限にし、再現確認と修正後の検証を行ってください。既存機能を壊さないでください。`
+      : taskMode === 'check'
+        ? `このリポジトリを点検してください。今回は調査専用です。ファイルの変更、コミット、PR作成は一切しないでください。\n\n【点検項目】\n${[...checkItems].map((item) => `- ${checkLabels[item]}`).join('\n')}\n\n結果は日本語で「今すぐ修正」「できれば修正」「問題なし」「判断が必要」に分類し、各問題の場所、原因、影響、推奨修正を簡潔に報告してください。推測と確認済み事実を区別してください。`
+        : `次の作業を実装してください。\n\n【作るもの・変更内容】\n${prompt}\n\n【変更してはいけないもの】\n${protectedAreas}\n\n【完成条件】\n${doneCriteria}\n\n作業範囲を守り、既存機能を壊さず、完了前に検証してください。`;
+    const hasInput = taskMode === 'debug' ? bugAction.trim() && bugActual.trim() && bugExpected.trim() : taskMode === 'check' ? checkItems.size > 0 : prompt.trim();
+    if (!selectedSource || !taskMode || !hasInput) {
+      Alert.alert('プロジェクトと必要な内容を入力してください');
       return;
     }
-    const session = await createSession(selectedSource.name, prompt, selectedSource.githubRepo?.defaultBranch?.displayName || 'main', [], false);
+    const session = await createSession(selectedSource.name, finalPrompt, selectedSource.githubRepo?.defaultBranch?.displayName || 'main', [], false);
     if (!session) return;
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setPrompt('');
+    setTaskMode(null);
     await fetchSessions(true);
     router.push({ pathname: '/session/id', params: { id: session.name, title: session.title || 'Jules タスク' } });
-  }, [createSession, fetchSessions, prompt, selectedSource]);
+  }, [bugAction, bugActual, bugExpected, bugFrequency, checkItems, createSession, doneCriteria, fetchSessions, prompt, protectedAreas, selectedSource, taskMode]);
 
   const openTask = useCallback((session: Session) => {
     router.push({ pathname: '/session/id', params: { id: session.name, title: session.title || 'Jules タスク', submittedPr: session.submittedPr || '' } });
@@ -182,10 +197,19 @@ export default function PocketHomeScreen() {
         </ScrollView>
         {selectedSource && selectedIsFavorite ? <TouchableOpacity onPress={() => void toggleFavorite(selectedSource)}><Text style={[styles.favoriteAction, { color: colors.primary }]}>{t('removeFromFavorites')}</Text></TouchableOpacity> : <Text style={[styles.hint, { color: colors.icon }]}>{isLoading ? t('loadingProjects') : favorites.length === 0 ? t('noFavoriteProjects') : t('projectPickerHint')}</Text>}
 
-        <View style={[styles.composer, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.composerLabel, { color: colors.text }]}>Julesへの指示</Text><TextInput style={[styles.prompt, { color: colors.text }]} value={prompt} onChangeText={setPrompt} multiline textAlignVertical="top" placeholder="日本語で、そのまま任せたいことを書いてください" placeholderTextColor={colors.icon} accessibilityLabel="Julesへの指示" />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>{presets.map((preset) => <TouchableOpacity key={preset.id} onPress={() => setPrompt(preset.prompt)} style={[styles.preset, { backgroundColor: colors.surfaceSecondary }]}><Text style={{ color: colors.text }}>{preset.title}</Text></TouchableOpacity>)}</ScrollView>
-          <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.primary, opacity: selectedSource && prompt.trim() ? 1 : 0.55 }]} disabled={!selectedSource || !prompt.trim() || isLoading} onPress={() => void sendToJules()}><Text style={styles.primaryButtonText}>{isLoading ? 'Julesに依頼中…' : 'Julesに任せる'}</Text></TouchableOpacity>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>何をしますか？</Text>
+        <View style={styles.modeGrid}>
+          {([{ key: 'build', title: '作る', detail: '機能追加・変更', icon: 'wrench' }, { key: 'debug', title: 'バグを直す', detail: '原因調査と修正', icon: 'terminal' }] as const).map((mode) => <TouchableOpacity key={mode.key} onPress={() => setTaskMode(mode.key)} style={[styles.modeCard, { backgroundColor: colors.surface, borderColor: taskMode === mode.key ? colors.primary : colors.border }]}><View style={[styles.modeIcon, { backgroundColor: `${colors.primary}1F` }]}><IconSymbol name={mode.icon} size={22} color={colors.primary} /></View><Text style={[styles.modeTitle, { color: colors.text }]}>{mode.title}</Text><Text style={[styles.modeDetail, { color: colors.icon }]}>{mode.detail}</Text></TouchableOpacity>)}
         </View>
+        <TouchableOpacity onPress={() => setTaskMode('check')} style={[styles.checkCard, { backgroundColor: colors.surface, borderColor: taskMode === 'check' ? colors.primary : colors.border }]}><View style={[styles.modeIcon, { backgroundColor: `${colors.accent}1F` }]}><IconSymbol name="magnifyingglass" size={22} color={colors.accent} /></View><View style={{ flex: 1 }}><Text style={[styles.modeTitle, { color: colors.text }]}>全体を点検する</Text><Text style={[styles.modeDetail, { color: colors.icon }]}>変更せず、問題だけを日本語で報告</Text></View><IconSymbol name="chevron.right" size={18} color={colors.icon} /></TouchableOpacity>
+
+        {taskMode ? <View style={[styles.composer, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
+          <View style={styles.formHeader}><Text style={[styles.composerLabel, { color: colors.text }]}>{taskMode === 'build' ? '新しい作業' : taskMode === 'debug' ? 'バグを直す' : 'プロジェクトを点検'}</Text><TouchableOpacity onPress={() => setTaskMode(null)}><IconSymbol name="xmark" size={20} color={colors.icon} /></TouchableOpacity></View>
+          {taskMode === 'build' ? <><Text style={[styles.fieldLabel, { color: colors.text }]}>何を作りますか？</Text><TextInput style={[styles.formInput, { color: colors.text, backgroundColor: colors.surfaceSecondary }]} value={prompt} onChangeText={setPrompt} multiline placeholder="完成した指示や変更内容" placeholderTextColor={colors.icon} /><Text style={[styles.fieldLabel, { color: colors.text }]}>変更してはいけないもの</Text><TextInput style={[styles.formInputSmall, { color: colors.text, backgroundColor: colors.surfaceSecondary }]} value={protectedAreas} onChangeText={setProtectedAreas} multiline /><Text style={[styles.fieldLabel, { color: colors.text }]}>完成条件</Text><TextInput style={[styles.formInputSmall, { color: colors.text, backgroundColor: colors.surfaceSecondary }]} value={doneCriteria} onChangeText={setDoneCriteria} multiline /></> : null}
+          {taskMode === 'debug' ? <><Text style={[styles.fieldLabel, { color: colors.text }]}>何をしたとき？</Text><TextInput style={[styles.formInputSmall, { color: colors.text, backgroundColor: colors.surfaceSecondary }]} value={bugAction} onChangeText={setBugAction} placeholder="例：送信ボタンを押したとき" placeholderTextColor={colors.icon} /><Text style={[styles.fieldLabel, { color: colors.text }]}>何が起きた？</Text><TextInput style={[styles.formInput, { color: colors.text, backgroundColor: colors.surfaceSecondary }]} value={bugActual} onChangeText={setBugActual} multiline placeholder="実際の症状やエラー" placeholderTextColor={colors.icon} /><Text style={[styles.fieldLabel, { color: colors.text }]}>本来どうなるべき？</Text><TextInput style={[styles.formInputSmall, { color: colors.text, backgroundColor: colors.surfaceSecondary }]} value={bugExpected} onChangeText={setBugExpected} multiline /><Text style={[styles.fieldLabel, { color: colors.text }]}>発生頻度</Text><View style={styles.frequencyRow}>{['毎回', '時々', '一度だけ'].map((value) => <TouchableOpacity key={value} onPress={() => setBugFrequency(value)} style={[styles.frequencyChip, { backgroundColor: bugFrequency === value ? colors.primary : colors.surfaceSecondary }]}><Text style={{ color: bugFrequency === value ? '#ffffff' : colors.text, fontWeight: '700' }}>{value}</Text></TouchableOpacity>)}</View></> : null}
+          {taskMode === 'check' ? <><Text style={[styles.fieldLabel, { color: colors.text }]}>点検する項目</Text>{([{ key: 'build', label: '起動・ビルド' }, { key: 'mobile', label: 'スマホ表示' }, { key: 'text', label: '文字化け・見切れ・日本語化' }, { key: 'errors', label: 'エラー処理' }, { key: 'security', label: 'セキュリティ' }, { key: 'performance', label: '処理速度' }, { key: 'quality', label: 'コード品質' }]).map((item) => <TouchableOpacity key={item.key} onPress={() => setCheckItems((current) => { const next = new Set(current); next.has(item.key) ? next.delete(item.key) : next.add(item.key); return next; })} style={styles.checkRow}><IconSymbol name={checkItems.has(item.key) ? 'checkmark.circle.fill' : 'circle'} size={21} color={checkItems.has(item.key) ? colors.primary : colors.icon} /><Text style={{ color: colors.text, fontWeight: '700' }}>{item.label}</Text></TouchableOpacity>)}<View style={[styles.auditNotice, { backgroundColor: `${colors.warning}17` }]}><Text style={{ color: colors.warning, fontSize: 12, lineHeight: 18, fontWeight: '700' }}>調査だけを依頼します。コード変更・PR作成は禁止します。</Text></View></> : null}
+          <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.primary, opacity: selectedSource && !isLoading ? 1 : 0.55 }]} disabled={!selectedSource || isLoading} onPress={() => void sendToJules()}><Text style={styles.primaryButtonText}>{isLoading ? 'Julesに依頼中…' : taskMode === 'check' ? '点検を開始' : taskMode === 'debug' ? '調査と修正を依頼' : 'Julesへ任せる'}</Text></TouchableOpacity>
+        </View> : null}
 
         <Text style={[styles.sectionTitle, { color: colors.text }]}>タスク状態</Text><View style={[styles.tabs, { backgroundColor: colors.surfaceSecondary }]}>{([{ key: 'running', label: '実行中' }, { key: 'waiting', label: '確認待ち' }, { key: 'completed', label: '完了' }] as { key: TaskGroup; label: string }[]).map((tab) => { const selected = group === tab.key; return <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected }} key={tab.key} onPress={() => setGroup(tab.key)} style={[styles.tab, selected && { backgroundColor: colors.surface, shadowColor: colors.primary }]}><Text numberOfLines={1} style={{ color: selected ? colors.primary : colors.icon, fontWeight: '800', fontSize: 13 }}>{tab.label}</Text><View style={[styles.tabCount, { backgroundColor: selected ? colors.primary : colors.border }]}><Text style={styles.tabCountText}>{taskCounts[tab.key]}</Text></View></TouchableOpacity>; })}</View>
         {tasks.length === 0 ? <View style={[styles.emptyTasks, { backgroundColor: colors.surface, borderColor: colors.border }]}><IconSymbol name="checkmark.circle.fill" size={28} color={colors.success} /><Text style={[styles.emptyTasksTitle, { color: colors.text }]}>ここは空です</Text><Text style={[styles.hint, { color: colors.icon }]}>この分類のタスクはありません。</Text></View> : tasks.map((task) => <View key={task.name} style={[styles.task, { backgroundColor: colors.surface, borderColor: colors.border, shadowColor: colors.primary }]}><TouchableOpacity accessibilityRole="button" onPress={() => openTask(task)} style={styles.taskMain}><View style={styles.taskTop}><Text numberOfLines={2} ellipsizeMode="tail" style={[styles.taskTitle, { color: colors.text }]}>{task.title || 'Jules タスク'}</Text><View style={[styles.stateBadge, { backgroundColor: group === 'waiting' ? `${colors.warning}1F` : group === 'completed' ? `${colors.success}1F` : `${colors.primary}1F` }]}><Text numberOfLines={1} style={{ color: group === 'waiting' ? colors.warning : group === 'completed' ? colors.success : colors.primary, fontWeight: '800', fontSize: 11 }}>{stateLabel(task)}</Text></View></View><Text numberOfLines={1} ellipsizeMode="middle" style={[styles.taskProject, { color: colors.icon }]}>{task.name.replace(/^sessions\//, '')}</Text><View style={styles.taskFooter}><Text numberOfLines={1} style={[styles.taskTime, { color: colors.icon }]}>更新 {formatTime(task.updateTime)}</Text><IconSymbol name="chevron.right" size={17} color={colors.icon} /></View></TouchableOpacity>{group === 'waiting' ? <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('deleteTask')} onPress={() => confirmDeleteTask(task)} style={[styles.deleteTaskButton, { borderTopColor: colors.border }]}><IconSymbol name="trash" size={17} color={colors.error} /><Text style={{ color: colors.error, fontWeight: '700', fontSize: 13 }}>{t('deleteTask')}</Text></TouchableOpacity> : null}</View>)}
@@ -241,8 +265,22 @@ const styles = StyleSheet.create({
   projectChipTitle: { fontWeight: '800', fontSize: 14 },
   projectChipOwner: { fontSize: 11, marginTop: 3, fontWeight: '600' },
   favoriteAction: { fontSize: 11, fontWeight: '700', alignSelf: 'flex-start', paddingVertical: 1 },
+  modeGrid: { flexDirection: 'row', gap: 10 },
+  modeCard: { flex: 1, minHeight: 122, borderWidth: 1.5, borderRadius: 18, padding: 14, justifyContent: 'center' },
+  modeIcon: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  modeTitle: { fontSize: 16, fontWeight: '900' },
+  modeDetail: { fontSize: 12, lineHeight: 17, marginTop: 3 },
+  checkCard: { minHeight: 78, borderWidth: 1.5, borderRadius: 18, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
   composer: { borderWidth: 1, borderRadius: 19, padding: 14, gap: 9, shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 1 },
   composerLabel: { fontSize: 16, fontWeight: '900' },
+  formHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  fieldLabel: { fontSize: 13, fontWeight: '800', marginTop: 4 },
+  formInput: { minHeight: 92, maxHeight: 220, borderRadius: 14, padding: 12, fontSize: 15, lineHeight: 21, textAlignVertical: 'top' },
+  formInputSmall: { minHeight: 52, maxHeight: 120, borderRadius: 14, padding: 12, fontSize: 14, lineHeight: 20, textAlignVertical: 'top' },
+  frequencyRow: { flexDirection: 'row', gap: 8 },
+  frequencyChip: { flex: 1, minHeight: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
+  checkRow: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  auditNotice: { borderRadius: 13, padding: 11 },
   prompt: { minHeight: 76, maxHeight: 210, fontSize: 15, lineHeight: 22 },
   presetRow: { gap: 8 },
   preset: { maxWidth: 190, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 15 },
