@@ -144,7 +144,10 @@ export default function PocketHomeScreen() {
       Alert.alert('プロジェクトと必要な内容を入力してください');
       return;
     }
-    const session = await createSession(selectedSource.name, finalPrompt, selectedSource.githubRepo?.defaultBranch?.displayName || 'main', [], false);
+    const taskPrompt = taskMode === 'check'
+      ? `${finalPrompt}\n\n【アプリ表示用の報告形式】\n修正が必要な項目は必ず1行ずつ、次の形式で日本語で出力してください。\n[FIX] 場所: <ファイルや画面> | 問題: <何が起きるか> | 修正: <何を直すか>\n問題がない項目は [OK] <項目名> としてください。進捗ログや途中経過はこの形式に混ぜないでください。`
+      : finalPrompt;
+    const session = await createSession(selectedSource.name, taskPrompt, selectedSource.githubRepo?.defaultBranch?.displayName || 'main', [], false);
     if (!session) return;
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setPrompt('');
