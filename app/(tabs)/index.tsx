@@ -145,7 +145,7 @@ export default function PocketHomeScreen() {
       return;
     }
     const taskPrompt = taskMode === 'check'
-      ? `${finalPrompt}\n\n【アプリ表示用の報告形式】\n修正が必要な項目は必ず1行ずつ、次の形式で日本語で出力してください。\n[FIX] 場所: <ファイルや画面> | 問題: <何が起きるか> | 修正: <何を直すか>\n問題がない項目は [OK] <項目名> としてください。進捗ログや途中経過はこの形式に混ぜないでください。`
+      ? `${finalPrompt}\n\n【アプリ表示用の報告形式】\n修正が必要な項目は、必ず次の4行を1セットにして日本語で出力してください。\n【1. 起動・ビルド】\n修正必要度: 今すぐ修正\n内容: <問題が起きる場所と状況>\n修正: <直す内容>\n\n分類は「1. 起動・ビルド」「2. スマホ表示」「3. 文字・日本語」「4. エラー処理」「5. セキュリティ」「6. 処理速度」「7. コード品質」から選んでください。問題がない項目は [OK] <項目名> としてください。進捗ログや途中経過はこの形式に混ぜないでください。`
       : finalPrompt;
     const session = await createSession(selectedSource.name, taskPrompt, selectedSource.githubRepo?.defaultBranch?.displayName || 'main', [], false);
     if (!session) return;

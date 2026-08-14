@@ -107,7 +107,15 @@ export default function SessionDetailScreen() {
   }), [activities]);
 
   const repairItems = useMemo(() => {
-    const reportedItems = activities.flatMap((activity) => activity.agentMessaged?.agentMessage?.split('\n') ?? [])
+    const agentReports = activities.flatMap((activity) => activity.agentMessaged?.agentMessage ? [activity.agentMessaged.agentMessage] : []);
+    const structuredItems = agentReports.flatMap((report) => {
+      const matches = report.matchAll(/【([^】]+)】\s*\n修正必要度:\s*([^\n]+)\n内容:\s*([^\n]+)(?:\n修正:\s*([^\n]+))?/g);
+      return [...matches].map((match) => {
+        const [, category, urgency, description, repair] = match;
+        return `【${category}】 ${urgency.trim()}\n${description.trim()}${repair ? `\n修正: ${repair.trim()}` : ''}`;
+      });
+    });
+    const legacyItems = agentReports.flatMap((report) => report.split('\n'))
       .map((line) => line.trim())
       .filter((line) => /^\[FIX\]\s*/i.test(line))
       .map((line) => line.replace(/^\[FIX\]\s*/i, '').trim());
@@ -118,7 +126,7 @@ export default function SessionDetailScreen() {
         .filter((line) => /^(?:[-*・]|\d+[.)])\s+/.test(line))
         .map((line) => line.replace(/^(?:[-*・]|\d+[.)])\s+/, '').trim());
     });
-    const items = [...reportedItems, ...carriedItems]
+    const items = [...structuredItems, ...legacyItems, ...carriedItems]
       .filter((line) => line.length >= 8 && line.length <= 260)
       .filter((line) => !/(問題なし|修正不要|異常なし|該当なし|対応不要|no issues?|nothing to fix)/i.test(line));
     return [...new Set(items)].slice(0, 12);
