@@ -333,16 +333,15 @@ export default function SessionDetailScreen() {
     setShowRepairChecklist(true);
   }, []);
 
-  const startRepairTask = useCallback(async (items: string[], recheck: boolean) => {
+  const startRepairTask = useCallback(async (items: string[]) => {
     const source = currentSession?.sourceContext?.source;
     if (!source || items.length === 0 || isStartingRepair) {
       if (!source) requestFollowUp();
       return;
     }
     const itemList = items.map((item) => `- ${item}`).join('\n');
-    const prompt = recheck
-      ? `次の修正項目がすべて直っているか再チェックしてください。今回は調査と検証だけを行い、追加の変更はしないでください。\n\n【再チェック項目】\n${itemList}\n\n各項目を「修正済み」「未修正」「確認が必要」に分類し、根拠を日本語で報告してください。`
-      : `次の点検指摘を修正してください。すべての修正後に、関連するビルド・テスト・スマホ表示を確認し、結果を日本語で報告してください。\n\n【修正項目】\n${itemList}`;
+    const customInstruction = customRepairRequest.trim();
+    const prompt = `次の点検指摘を修正してください。すべての修正後に、同じ項目を再チェックし、各項目を「修正済み」「未修正」「確認が必要」に分類して日本語で報告してください。\n\n【修正項目】\n${itemList}${customInstruction ? `\n\n【追加の修正依頼】\n${customInstruction}` : ''}`;
     setIsStartingRepair(true);
     try {
       const session = await createSession(source, prompt, currentSession?.sourceContext?.githubRepoContext?.startingBranch, [], false);
@@ -352,7 +351,7 @@ export default function SessionDetailScreen() {
     } finally {
       setIsStartingRepair(false);
     }
-  }, [createSession, currentSession, isStartingRepair, requestFollowUp, router, t]);
+  }, [createSession, currentSession, customRepairRequest, isStartingRepair, requestFollowUp, router, t]);
 
   const stopTask = useCallback(() => {
     if (!id || isStoppingTask) return;
@@ -597,6 +596,15 @@ export default function SessionDetailScreen() {
                 {sessionState === 'COMPLETED' && showRepairChecklist && (
                   <View style={[styles.repairCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                     <Text style={[styles.repairTitle, { color: theme.text }]}>{t('repairChecklist')}</Text>
+                    <TextInput
+                      style={[styles.customRepairInput, { backgroundColor: theme.background, borderColor: theme.border, color: theme.text }]}
+                      value={customRepairRequest}
+                      onChangeText={setCustomRepairRequest}
+                      placeholder={t('customRepairPlaceholder')}
+                      placeholderTextColor={theme.icon}
+                      multiline
+                      textAlignVertical="top"
+                    />
                     {repairItems.length > 0 ? (
                       <>
                         {repairItems.map((item) => {
@@ -621,44 +629,21 @@ export default function SessionDetailScreen() {
                         <TouchableOpacity
                           style={[styles.followUpButton, { backgroundColor: theme.primary, opacity: selectedRepairItems.size > 0 && !isStartingRepair ? 1 : 0.5 }]}
                           disabled={selectedRepairItems.size === 0 || isStartingRepair}
-                          onPress={() => void startRepairTask([...selectedRepairItems], false)}
+                          onPress={() => void startRepairTask([...selectedRepairItems])}
                         >
                           <Text style={styles.followUpButtonText}>{t('repairSelected')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={[styles.secondaryRepairButton, { borderColor: theme.primary }]}
                           disabled={isStartingRepair}
-                          onPress={() => void startRepairTask(repairItems, false)}
+                          onPress={() => void startRepairTask(repairItems)}
                         >
                           <Text style={[styles.secondaryRepairButtonText, { color: theme.primary }]}>{t('repairAll')}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.secondaryRepairButton, { borderColor: theme.success }]}
-                          disabled={isStartingRepair}
-                          onPress={() => void startRepairTask(repairItems, true)}
-                        >
-                          <Text style={[styles.secondaryRepairButtonText, { color: theme.success }]}>{t('recheckRepairs')}</Text>
                         </TouchableOpacity>
                       </>
                     ) : (
                       <Text style={[styles.repairEmpty, { color: theme.icon }]}>{t('noRepairItems')}</Text>
                     )}
-                    <TextInput
-                      style={[styles.customRepairInput, { backgroundColor: theme.background, borderColor: theme.border, color: theme.text }]}
-                      value={customRepairRequest}
-                      onChangeText={setCustomRepairRequest}
-                      placeholder={t('customRepairPlaceholder')}
-                      placeholderTextColor={theme.icon}
-                      multiline
-                      textAlignVertical="top"
-                    />
-                    <TouchableOpacity
-                      style={[styles.secondaryRepairButton, { borderColor: theme.primary, opacity: customRepairRequest.trim() && !isStartingRepair ? 1 : 0.5 }]}
-                      disabled={!customRepairRequest.trim() || isStartingRepair}
-                      onPress={() => void startRepairTask([customRepairRequest.trim()], false)}
-                    >
-                      <Text style={[styles.secondaryRepairButtonText, { color: theme.primary }]}>{t('startCustomRepair')}</Text>
-                    </TouchableOpacity>
                   </View>
                 )}
               </>
