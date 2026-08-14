@@ -31,6 +31,10 @@ import { SessionHeaderRight } from '@/components/jules/session-header-right';
 import { ErrorBanner } from '@/components/jules/error-banner';
 import { SessionInput } from '@/components/jules/session-input';
 import { Colors } from '@/constants/theme';
+import { AuditResultPanel } from '@/components/jules/audit-result-panel';
+import { FinalReviewPanel } from '@/components/jules/final-review-panel';
+import { OneClickPipelinePanel } from '@/components/jules/one-click-pipeline-panel';
+import { CHECK_ITEM_KEYS, createOneClickCompletePrompt, isAuditOnlySession, isOneClickCompleteSession, ONE_CLICK_MARKER } from '@/utils/audit-results';
 
 export default function SessionDetailScreen() {
   const { id, title, submittedPr } = useLocalSearchParams<{ id: string; title: string; submittedPr?: string }>();
@@ -54,6 +58,7 @@ export default function SessionDetailScreen() {
   const [isStartingRepair, setIsStartingRepair] = useState(false);
   const [showRepairChecklist, setShowRepairChecklist] = useState(false);
   const [customRepairRequest, setCustomRepairRequest] = useState('');
+  const [isCreatingFix, setIsCreatingFix] = useState(false);
   const keyboardPadding = useRef(new Animated.Value(0)).current;
   const preparingPulse = useRef(new Animated.Value(0.35)).current;
   const autoApprovedSessionRef = useRef<string | null>(null);
@@ -370,6 +375,47 @@ export default function SessionDetailScreen() {
     }
   }, [createSession, currentSession, isStartingRepair, router, t]);
 
+  const isAuditSession = useMemo(() => isAuditOnlySession(activities), [activities]);
+  const isOneClickSession = useMemo(() => isOneClickCompleteSession(activities), [activities]);
+
+  const startOneClickFromSession = useCallback(async () => {
+    const source = currentSession?.sourceContext?.source;
+    if (!source || isStartingRepair || isCreatingFix) {
+      if (!source) Alert.alert(t('error'), t('auditMissingSource'));
+      return;
+    }
+    const extra = customRepairRequest.trim();
+    const prompt = repairItems.length > 0
+      ? `${ONE_CLICK_MARKER}途中で止めず、次の点検項目をすべて修正し、自己チェックのあとPR作成まで一気に完了してください。\n\n【修正項目】\n${repairItems.map((item) => `- ${item}`).join('\n')}${extra ? `\n\n【追加の指示】\n${extra}` : ''}\n\n変更は必要最小限にし、修正後は自己チェックしてからPRを作成してください。`
+      : createOneClickCompletePrompt(CHECK_ITEM_KEYS, extra);
+    setIsCreatingFix(true);
+    try {
+      const session = await createSession(source, prompt, currentSession?.sourceContext?.githubRepoContext?.startingBranch || 'main', [], false);
+      if (!session) return;
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.push({ pathname: '/session/id', params: { id: session.name, title: session.title || t('oneClickTaskTitle') } });
+    } finally {
+      setIsCreatingFix(false);
+    }
+  }, [createSession, currentSession?.sourceContext?.githubRepoContext?.startingBranch, currentSession?.sourceContext?.source, customRepairRequest, isCreatingFix, isStartingRepair, repairItems, router, t]);
+
+  const createFixTask = useCallback(async (fixPrompt: string) => {
+    const source = currentSession?.sourceContext?.source;
+    if (!source || isCreatingFix) {
+      Alert.alert(t('error'), t('auditMissingSource'));
+      return;
+    }
+    setIsCreatingFix(true);
+    try {
+      const session = await createSession(source, fixPrompt, currentSession?.sourceContext?.githubRepoContext?.startingBranch || 'main', [], false);
+      if (!session) return;
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.push({ pathname: '/session/id', params: { id: session.name, title: session.title || t('oneClickTaskTitle') } });
+    } finally {
+      setIsCreatingFix(false);
+    }
+  }, [createSession, currentSession?.sourceContext?.githubRepoContext?.startingBranch, currentSession?.sourceContext?.source, isCreatingFix, router, t]);
+
   const stopTask = useCallback(() => {
     if (!id || isStoppingTask) return;
     Alert.alert(t('stopTaskTitle'), t('stopTaskDescription'), [
@@ -537,7 +583,21 @@ export default function SessionDetailScreen() {
             maxToRenderPerBatch={10}
             windowSize={10}
             ListHeaderComponent={
-              sessionState === 'COMPLETED' && currentSubmittedPr ? (
+              <>
+              {isOneClickSession && (
+                <OneClickPipelinePanel
+                  activities={activities}
+                  sessionState={sessionState}
+                  hasPullRequest={!!currentSubmittedPr}
+                  isDark={isDark}
+                />
+              )}
+              {sessionState === 'COMPLETED' && !currentSubmittedPr && (isAuditSession || isOneClickSession) && (
+                <AuditResultPanel activities={activities} isDark={isDark} isCreatingFix={isCreatingFix} onCreateFix={createFixTask} />
+              )}
+              {sessionState === 'COMPLETED' && currentSubmittedPr ? (
+                <>
+                <FinalReviewPanel pullRequest={currentSubmittedPr} activities={activities} isDark={isDark} />
                 <TouchableOpacity
                   style={[styles.prBanner, isDark && styles.prBannerDark]}
                   onPress={() => {
@@ -560,7 +620,9 @@ export default function SessionDetailScreen() {
                     <IconSymbol name="chevron.right" size={14} color="rgba(255,255,255,0.7)" />
                   </LinearGradient>
                 </TouchableOpacity>
-              ) : null
+                </>
+              ) : null}
+              </>
             }
             ListEmptyComponent={
               isPreparing ? (
@@ -600,15 +662,27 @@ export default function SessionDetailScreen() {
                   </View>
                 )}
                 {sessionState === 'COMPLETED' && !showRepairChecklist && (
-                  <TouchableOpacity
-                    style={[styles.followUpButton, { backgroundColor: theme.primary }]}
-                    onPress={requestFollowUp}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('requestFollowUp')}
-                  >
-                    <IconSymbol name="paperplane.fill" size={18} color="#ffffff" />
-                    <Text style={styles.followUpButtonText}>{t('requestFollowUp')}</Text>
-                  </TouchableOpacity>
+                  <>
+                    <TouchableOpacity
+                      style={[styles.followUpButton, { backgroundColor: theme.success, opacity: isCreatingFix ? 0.55 : 1 }]}
+                      disabled={isCreatingFix}
+                      onPress={() => void startOneClickFromSession()}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('oneClickSubmit')}
+                    >
+                      <IconSymbol name="bolt.fill" size={18} color="#ffffff" />
+                      <Text style={styles.followUpButtonText}>{isCreatingFix ? t('oneClickStarting') : t('oneClickSubmit')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.followUpButton, { backgroundColor: theme.primary }]}
+                      onPress={requestFollowUp}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('requestFollowUp')}
+                    >
+                      <IconSymbol name="paperplane.fill" size={18} color="#ffffff" />
+                      <Text style={styles.followUpButtonText}>{t('requestFollowUp')}</Text>
+                    </TouchableOpacity>
+                  </>
                 )}
                 {sessionState === 'COMPLETED' && showRepairChecklist && (
                   <View style={[styles.repairCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>

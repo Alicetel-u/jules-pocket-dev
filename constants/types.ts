@@ -84,6 +84,12 @@ export interface Session {
   createTime: string;
   updateTime: string;
   outputs?: SessionOutput[];
+  sourceContext?: {
+    source: string;
+    githubRepoContext?: {
+      startingBranch?: string;
+    };
+  };
   submittedPr?: string;
   url?: string;
 }

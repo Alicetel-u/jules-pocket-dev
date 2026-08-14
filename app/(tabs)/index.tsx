@@ -11,9 +11,20 @@ import { useJulesApi } from '@/hooks/use-jules-api';
 import { usePocketPreferences } from '@/hooks/use-pocket-preferences';
 import { useI18n } from '@/constants/i18n-context';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { CHECK_ITEM_KEYS, createCheckPrompt, createOneClickCompletePrompt, type CheckItemKey } from '@/utils/audit-results';
 
 type TaskGroup = 'running' | 'waiting' | 'completed';
 type TaskMode = 'build' | 'debug' | 'check';
+
+const CHECK_ITEM_I18N: Record<CheckItemKey, 'checkItemBuild' | 'checkItemMobile' | 'checkItemText' | 'checkItemErrors' | 'checkItemSecurity' | 'checkItemPerformance' | 'checkItemQuality'> = {
+  build: 'checkItemBuild',
+  mobile: 'checkItemMobile',
+  text: 'checkItemText',
+  errors: 'checkItemErrors',
+  security: 'checkItemSecurity',
+  performance: 'checkItemPerformance',
+  quality: 'checkItemQuality',
+};
 
 function groupFor(session: Session): TaskGroup {
   if (session.state === 'COMPLETED' || session.state === 'FAILED') return 'completed';
@@ -64,7 +75,8 @@ export default function PocketHomeScreen() {
   const [bugFrequency, setBugFrequency] = useState('毎回');
   const [protectedAreas, setProtectedAreas] = useState('既存機能と既存デザインを壊さない');
   const [doneCriteria, setDoneCriteria] = useState('Web版をビルドし、スマホ表示で問題がないことを確認する');
-  const [checkItems, setCheckItems] = useState(() => new Set(['build', 'mobile', 'text', 'errors']));
+  const [checkItems, setCheckItems] = useState(() => new Set<CheckItemKey>(['build', 'mobile', 'text', 'errors']));
+  const [autoNotes, setAutoNotes] = useState('');
   const [group, setGroup] = useState<TaskGroup>('running');
   const [refreshing, setRefreshing] = useState(false);
   const [isProjectPickerVisible, setIsProjectPickerVisible] = useState(false);
@@ -155,11 +167,10 @@ export default function PocketHomeScreen() {
   }, [favorites, saveFavorites]);
 
   const sendToJules = useCallback(async () => {
-    const checkLabels: Record<string, string> = { build: '起動・ビルド', mobile: 'スマホ表示', text: '文字化け・見切れ・未翻訳', errors: 'エラー処理', security: 'セキュリティ', performance: '処理速度', quality: 'コード品質' };
     const finalPrompt = taskMode === 'debug'
       ? `次の不具合を調査し、原因を特定して修正してください。\n\n【操作】\n${bugAction}\n\n【実際に起きたこと】\n${bugActual}\n\n【本来の動作】\n${bugExpected}\n\n【発生頻度】\n${bugFrequency}\n\n変更は必要最小限にし、再現確認と修正後の検証を行ってください。既存機能を壊さないでください。`
       : taskMode === 'check'
-        ? `このリポジトリを点検してください。今回は調査専用です。ファイルの変更、コミット、PR作成は一切しないでください。\n\n【点検項目】\n${[...checkItems].map((item) => `- ${checkLabels[item]}`).join('\n')}\n\n結果は日本語で「今すぐ修正」「できれば修正」「問題なし」「判断が必要」に分類し、各問題の場所、原因、影響、推奨修正を簡潔に報告してください。推測と確認済み事実を区別してください。`
+        ? createCheckPrompt(checkItems)
         : `次の作業を実装してください。\n\n【作るもの・変更内容】\n${prompt}\n\n【変更してはいけないもの】\n${protectedAreas}\n\n【完成条件】\n${doneCriteria}\n\n作業範囲を守り、既存機能を壊さず、完了前に検証してください。`;
     const hasInput = taskMode === 'debug' ? bugAction.trim() && bugActual.trim() && bugExpected.trim() : taskMode === 'check' ? checkItems.size > 0 : prompt.trim();
     if (!selectedSource || !taskMode || !hasInput) {
@@ -177,6 +188,26 @@ export default function PocketHomeScreen() {
     await fetchSessions(true);
     router.push({ pathname: '/session/id', params: { id: session.name, title: session.title || 'Jules タスク' } });
   }, [bugAction, bugActual, bugExpected, bugFrequency, checkItems, createSession, doneCriteria, fetchSessions, prompt, protectedAreas, selectedSource, taskMode]);
+
+  const sendOneClickComplete = useCallback(async () => {
+    if (!selectedSource || checkItems.size === 0) {
+      Alert.alert(t('oneClickNeedProject'));
+      return;
+    }
+    const session = await createSession(
+      selectedSource.name,
+      createOneClickCompletePrompt(checkItems, autoNotes),
+      selectedSource.githubRepo?.defaultBranch?.displayName || 'main',
+      [],
+      false,
+    );
+    if (!session) return;
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setAutoNotes('');
+    setTaskMode(null);
+    await fetchSessions(true);
+    router.push({ pathname: '/session/id', params: { id: session.name, title: session.title || t('oneClickTaskTitle') } });
+  }, [autoNotes, checkItems, createSession, fetchSessions, selectedSource, t]);
 
   const openTask = useCallback((session: Session) => {
     router.push({ pathname: '/session/id', params: { id: session.name, title: session.title || 'Jules タスク', submittedPr: session.submittedPr || '' } });
@@ -223,6 +254,54 @@ export default function PocketHomeScreen() {
         {selectedSource && selectedIsFavorite ? <TouchableOpacity onPress={() => void toggleFavorite(selectedSource)}><Text style={[styles.favoriteAction, { color: colors.primary }]}>{t('removeFromFavorites')}</Text></TouchableOpacity> : <Text style={[styles.hint, { color: colors.icon }]}>{isLoading ? t('loadingProjects') : favorites.length === 0 ? t('noFavoriteProjects') : t('projectPickerHint')}</Text>}
 
         <Text style={[styles.sectionTitle, { color: colors.text }]}>何をしますか？</Text>
+        <View style={[styles.autoCard, { backgroundColor: colors.surface, borderColor: colors.success }]}>
+          <View style={styles.autoHeader}>
+            <View style={[styles.modeIcon, { backgroundColor: `${colors.success}1F`, marginBottom: 0 }]}>
+              <IconSymbol name="bolt.fill" size={22} color={colors.success} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.modeTitle, { color: colors.text }]}>{t('oneClickTitle')}</Text>
+              <Text style={[styles.modeDetail, { color: colors.icon }]}>{t('oneClickDetail')}</Text>
+            </View>
+          </View>
+          <Text style={[styles.hint, { color: colors.icon }]}>{t('oneClickDescription')}</Text>
+          <Text style={[styles.fieldLabel, { color: colors.text }]}>{t('oneClickItems')}</Text>
+          {CHECK_ITEM_KEYS.map((item) => (
+            <TouchableOpacity
+              key={item}
+              onPress={() => setCheckItems((current) => {
+                const next = new Set(current);
+                if (next.has(item)) next.delete(item);
+                else next.add(item);
+                return next;
+              })}
+              style={styles.checkRow}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: checkItems.has(item) }}
+            >
+              <IconSymbol name={checkItems.has(item) ? 'checkmark.circle.fill' : 'circle'} size={21} color={checkItems.has(item) ? colors.success : colors.icon} />
+              <Text style={{ color: colors.text, fontWeight: '700' }}>{t(CHECK_ITEM_I18N[item])}</Text>
+            </TouchableOpacity>
+          ))}
+          <Text style={[styles.fieldLabel, { color: colors.text }]}>{t('oneClickNotes')}</Text>
+          <TextInput
+            style={[styles.formInputSmall, { color: colors.text, backgroundColor: colors.surfaceSecondary }]}
+            value={autoNotes}
+            onChangeText={setAutoNotes}
+            multiline
+            placeholder={t('oneClickNotesPlaceholder')}
+            placeholderTextColor={colors.icon}
+          />
+          <TouchableOpacity
+            style={[styles.primaryButton, { backgroundColor: colors.success, opacity: selectedSource && !isLoading && checkItems.size > 0 ? 1 : 0.55 }]}
+            disabled={!selectedSource || isLoading || checkItems.size === 0}
+            onPress={() => void sendOneClickComplete()}
+            accessibilityRole="button"
+            accessibilityLabel={t('oneClickSubmit')}
+          >
+            <Text style={styles.primaryButtonText}>{isLoading ? t('oneClickStarting') : t('oneClickSubmit')}</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.modeGrid}>
           {([{ key: 'build', title: '作る', detail: '機能追加・変更', icon: 'wrench' }, { key: 'debug', title: 'バグを直す', detail: '原因調査と修正', icon: 'terminal' }] as const).map((mode) => <TouchableOpacity key={mode.key} onPress={() => setTaskMode(mode.key)} style={[styles.modeCard, { backgroundColor: colors.surface, borderColor: taskMode === mode.key ? colors.primary : colors.border }]}><View style={[styles.modeIcon, { backgroundColor: `${colors.primary}1F` }]}><IconSymbol name={mode.icon} size={22} color={colors.primary} /></View><Text style={[styles.modeTitle, { color: colors.text }]}>{mode.title}</Text><Text style={[styles.modeDetail, { color: colors.icon }]}>{mode.detail}</Text></TouchableOpacity>)}
         </View>
@@ -232,7 +311,7 @@ export default function PocketHomeScreen() {
           <View style={styles.formHeader}><Text style={[styles.composerLabel, { color: colors.text }]}>{taskMode === 'build' ? '新しい作業' : taskMode === 'debug' ? 'バグを直す' : 'プロジェクトを点検'}</Text><TouchableOpacity onPress={() => setTaskMode(null)}><IconSymbol name="xmark" size={20} color={colors.icon} /></TouchableOpacity></View>
           {taskMode === 'build' ? <><Text style={[styles.fieldLabel, { color: colors.text }]}>何を作りますか？</Text><TextInput style={[styles.formInput, { color: colors.text, backgroundColor: colors.surfaceSecondary }]} value={prompt} onChangeText={setPrompt} multiline placeholder="完成した指示や変更内容" placeholderTextColor={colors.icon} /><Text style={[styles.fieldLabel, { color: colors.text }]}>変更してはいけないもの</Text><TextInput style={[styles.formInputSmall, { color: colors.text, backgroundColor: colors.surfaceSecondary }]} value={protectedAreas} onChangeText={setProtectedAreas} multiline /><Text style={[styles.fieldLabel, { color: colors.text }]}>完成条件</Text><TextInput style={[styles.formInputSmall, { color: colors.text, backgroundColor: colors.surfaceSecondary }]} value={doneCriteria} onChangeText={setDoneCriteria} multiline /></> : null}
           {taskMode === 'debug' ? <><Text style={[styles.fieldLabel, { color: colors.text }]}>何をしたとき？</Text><TextInput style={[styles.formInputSmall, { color: colors.text, backgroundColor: colors.surfaceSecondary }]} value={bugAction} onChangeText={setBugAction} placeholder="例：送信ボタンを押したとき" placeholderTextColor={colors.icon} /><Text style={[styles.fieldLabel, { color: colors.text }]}>何が起きた？</Text><TextInput style={[styles.formInput, { color: colors.text, backgroundColor: colors.surfaceSecondary }]} value={bugActual} onChangeText={setBugActual} multiline placeholder="実際の症状やエラー" placeholderTextColor={colors.icon} /><Text style={[styles.fieldLabel, { color: colors.text }]}>本来どうなるべき？</Text><TextInput style={[styles.formInputSmall, { color: colors.text, backgroundColor: colors.surfaceSecondary }]} value={bugExpected} onChangeText={setBugExpected} multiline /><Text style={[styles.fieldLabel, { color: colors.text }]}>発生頻度</Text><View style={styles.frequencyRow}>{['毎回', '時々', '一度だけ'].map((value) => <TouchableOpacity key={value} onPress={() => setBugFrequency(value)} style={[styles.frequencyChip, { backgroundColor: bugFrequency === value ? colors.primary : colors.surfaceSecondary }]}><Text style={{ color: bugFrequency === value ? '#ffffff' : colors.text, fontWeight: '700' }}>{value}</Text></TouchableOpacity>)}</View></> : null}
-          {taskMode === 'check' ? <><Text style={[styles.fieldLabel, { color: colors.text }]}>点検する項目</Text>{([{ key: 'build', label: '起動・ビルド' }, { key: 'mobile', label: 'スマホ表示' }, { key: 'text', label: '文字化け・見切れ・日本語化' }, { key: 'errors', label: 'エラー処理' }, { key: 'security', label: 'セキュリティ' }, { key: 'performance', label: '処理速度' }, { key: 'quality', label: 'コード品質' }]).map((item) => <TouchableOpacity key={item.key} onPress={() => setCheckItems((current) => { const next = new Set(current); next.has(item.key) ? next.delete(item.key) : next.add(item.key); return next; })} style={styles.checkRow}><IconSymbol name={checkItems.has(item.key) ? 'checkmark.circle.fill' : 'circle'} size={21} color={checkItems.has(item.key) ? colors.primary : colors.icon} /><Text style={{ color: colors.text, fontWeight: '700' }}>{item.label}</Text></TouchableOpacity>)}<View style={[styles.auditNotice, { backgroundColor: `${colors.warning}17` }]}><Text style={{ color: colors.warning, fontSize: 12, lineHeight: 18, fontWeight: '700' }}>調査だけを依頼します。コード変更・PR作成は禁止します。</Text></View></> : null}
+          {taskMode === 'check' ? <><Text style={[styles.fieldLabel, { color: colors.text }]}>点検する項目</Text>{CHECK_ITEM_KEYS.map((item) => <TouchableOpacity key={item} onPress={() => setCheckItems((current) => { const next = new Set(current); if (next.has(item)) next.delete(item); else next.add(item); return next; })} style={styles.checkRow}><IconSymbol name={checkItems.has(item) ? 'checkmark.circle.fill' : 'circle'} size={21} color={checkItems.has(item) ? colors.primary : colors.icon} /><Text style={{ color: colors.text, fontWeight: '700' }}>{t(CHECK_ITEM_I18N[item])}</Text></TouchableOpacity>)}<View style={[styles.auditNotice, { backgroundColor: `${colors.warning}17` }]}><Text style={{ color: colors.warning, fontSize: 12, lineHeight: 18, fontWeight: '700' }}>調査だけを依頼します。コード変更・PR作成は禁止します。</Text></View></> : null}
           <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.primary, opacity: selectedSource && !isLoading ? 1 : 0.55 }]} disabled={!selectedSource || isLoading} onPress={() => void sendToJules()}><Text style={styles.primaryButtonText}>{isLoading ? 'Julesに依頼中…' : taskMode === 'check' ? '点検を開始' : taskMode === 'debug' ? '調査と修正を依頼' : 'Julesへ任せる'}</Text></TouchableOpacity>
         </View> : null}
 
@@ -296,6 +375,8 @@ const styles = StyleSheet.create({
   modeTitle: { fontSize: 16, fontWeight: '900' },
   modeDetail: { fontSize: 12, lineHeight: 17, marginTop: 3 },
   checkCard: { minHeight: 78, borderWidth: 1.5, borderRadius: 18, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  autoCard: { borderWidth: 1.5, borderRadius: 19, padding: 14, gap: 9 },
+  autoHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   composer: { borderWidth: 1, borderRadius: 19, padding: 14, gap: 9, shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 1 },
   composerLabel: { fontSize: 16, fontWeight: '900' },
   formHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

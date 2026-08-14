@@ -9,3 +9,6 @@ export { ApprovalBanner } from './approval-banner';
 export { FeedbackBanner } from './feedback-banner';
 export { SessionInput } from './session-input';
 export { PrCard } from './pr-card';
+export { OneClickPipelinePanel } from './one-click-pipeline-panel';
+export { AuditResultPanel } from './audit-result-panel';
+export { FinalReviewPanel } from './final-review-panel';

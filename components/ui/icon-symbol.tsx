@@ -23,6 +23,7 @@ const MAPPING = {
   'chevron.up': 'keyboard-arrow-up',
   'chevron.left': 'chevron-left',
   'arrow.clockwise': 'refresh',
+  'arrow.triangle.pull': 'call-merge',
   
   // Actions
   'plus': 'add',
@@ -41,6 +42,7 @@ const MAPPING = {
   'terminal': 'terminal',
   'doc.text': 'description',
   'wrench': 'build',
+  'bolt.fill': 'flash-on',
   'lightbulb': 'lightbulb',
   'info.circle': 'info',
   'link': 'link',
