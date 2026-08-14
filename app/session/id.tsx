@@ -353,6 +353,19 @@ export default function SessionDetailScreen() {
     }
   }, [createSession, currentSession, customRepairRequest, isStartingRepair, requestFollowUp, router, t]);
 
+  const rerunAudit = useCallback(async () => {
+    const source = currentSession?.sourceContext?.source;
+    if (!source || isStartingRepair) return;
+    const prompt = `このリポジトリを再点検してください。今回は調査だけを行い、コード変更・コミット・PR作成はしないでください。\n\n【アプリ表示用の報告形式】\n修正が必要な項目は必ず次の4行を1セットにして日本語で出力してください。\n【1. 起動・ビルド】\n修正必要度: 今すぐ修正\n内容: <問題が起きる場所と状況>\n修正: <直す内容>\n\n分類は「1. 起動・ビルド」「2. スマホ表示」「3. 文字・日本語」「4. エラー処理」「5. セキュリティ」「6. 処理速度」「7. コード品質」から選んでください。問題がない項目は [OK] <項目名> としてください。`;
+    setIsStartingRepair(true);
+    try {
+      const session = await createSession(source, prompt, currentSession?.sourceContext?.githubRepoContext?.startingBranch, [], false);
+      if (session) router.push({ pathname: '/session/id', params: { id: session.name, title: session.title || t('rerunAudit') } });
+    } finally {
+      setIsStartingRepair(false);
+    }
+  }, [createSession, currentSession, isStartingRepair, router, t]);
+
   const stopTask = useCallback(() => {
     if (!id || isStoppingTask) return;
     Alert.alert(t('stopTaskTitle'), t('stopTaskDescription'), [
@@ -642,7 +655,16 @@ export default function SessionDetailScreen() {
                         </TouchableOpacity>
                       </>
                     ) : (
-                      <Text style={[styles.repairEmpty, { color: theme.icon }]}>{t('noRepairItems')}</Text>
+                      <>
+                        <Text style={[styles.repairEmpty, { color: theme.icon }]}>{t('legacyReportMessage')}</Text>
+                        <TouchableOpacity
+                          style={[styles.secondaryRepairButton, { borderColor: theme.primary, opacity: isStartingRepair ? 0.5 : 1 }]}
+                          disabled={isStartingRepair}
+                          onPress={() => void rerunAudit()}
+                        >
+                          <Text style={[styles.secondaryRepairButtonText, { color: theme.primary }]}>{t('rerunAudit')}</Text>
+                        </TouchableOpacity>
+                      </>
                     )}
                   </View>
                 )}
