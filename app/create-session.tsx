@@ -8,7 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { router, Stack } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useJulesApi } from '@/hooks/use-jules-api';
@@ -28,6 +28,7 @@ import { SubmitButton } from '@/components/jules/create-session/submit-button';
 import { styles } from '@/components/jules/create-session/styles';
 
 export default function CreateSessionScreen() {
+  const { followUp } = useLocalSearchParams<{ followUp?: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
@@ -45,6 +46,10 @@ export default function CreateSessionScreen() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [recentRepos, setRecentRepos] = useState<Source[]>([]);
   const [sourceQuery, setSourceQuery] = useState('');
+
+  useEffect(() => {
+    if (followUp) setPrompt(followUp);
+  }, [followUp]);
 
   const {
     isLoading,

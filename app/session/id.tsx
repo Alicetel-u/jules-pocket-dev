@@ -296,8 +296,8 @@ export default function SessionDetailScreen() {
 
   const requestFollowUp = useCallback(() => {
     const taskTitle = title || t('sessions');
-    router.replace({
-      pathname: '/',
+    router.push({
+      pathname: '/create-session',
       params: { followUp: `完了した「${taskTitle}」を確認し、次の修正をしてください。\n\n` },
     });
   }, [router, t, title]);
