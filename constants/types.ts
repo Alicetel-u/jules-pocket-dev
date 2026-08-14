@@ -63,6 +63,12 @@ export interface SessionOutput {
 export interface Session {
   name: string; // "sessions/..."
   title?: string;
+  sourceContext?: {
+    source: string;
+    githubRepoContext?: {
+      startingBranch: string;
+    };
+  };
   state: 
     | 'STATE_UNSPECIFIED'
     | 'QUEUED'

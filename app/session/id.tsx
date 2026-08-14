@@ -49,12 +49,14 @@ export default function SessionDetailScreen() {
   const [currentSubmittedPr, setCurrentSubmittedPr] = useState<string | import('@/constants/types').PullRequest | undefined>(submittedPr);
   const [isSendingInstruction, setIsSendingInstruction] = useState(false);
   const [isStoppingTask, setIsStoppingTask] = useState(false);
+  const [selectedRepairItems, setSelectedRepairItems] = useState<Set<string>>(() => new Set());
+  const [isStartingRepair, setIsStartingRepair] = useState(false);
   const keyboardPadding = useRef(new Animated.Value(0)).current;
   const preparingPulse = useRef(new Animated.Value(0.35)).current;
   const autoApprovedSessionRef = useRef<string | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
-  const { isLoading, error, clearError, fetchActivities, fetchActivitiesSince, fetchSession, approvePlan, sendMessage, deleteSession } = useJulesApi({ apiKey, t });
+  const { isLoading, error, clearError, fetchActivities, fetchActivitiesSince, fetchSession, approvePlan, sendMessage, deleteSession, createSession } = useJulesApi({ apiKey, t });
 
   const isPreparing = activities.length === 0 && (
     !sessionState || sessionState === 'QUEUED' || sessionState === 'PLANNING' || sessionState === 'IN_PROGRESS'
@@ -100,6 +102,23 @@ export default function SessionDetailScreen() {
     if (progressTitle || description) return true;
     return (activity.artifacts ?? []).some((artifact) => artifact.bashOutput || artifact.media);
   }), [activities]);
+
+  const repairItems = useMemo(() => {
+    const texts = activities.flatMap((activity) => [
+      activity.agentMessaged?.agentMessage,
+      activity.progressUpdated?.description,
+      activity.userMessaged?.userMessage,
+    ]).filter((text): text is string => Boolean(text));
+    const items = texts.flatMap((text) => text.split('\n')).map((line) => line.trim())
+      .filter((line) => /^(?:[-*・]|\d+[.)])\s+/.test(line))
+      .map((line) => line.replace(/^(?:[-*・]|\d+[.)])\s+/, '').trim())
+      .filter((line) => line.length >= 8 && line.length <= 220);
+    return [...new Set(items)].slice(0, 12);
+  }, [activities]);
+
+  useEffect(() => {
+    setSelectedRepairItems(new Set(repairItems));
+  }, [repairItems]);
 
   // キーボード表示時のアニメーション付きパディング調整
   useEffect(() => {
@@ -301,6 +320,27 @@ export default function SessionDetailScreen() {
       params: { followUp: `完了した「${taskTitle}」を確認し、次の修正をしてください。\n\n` },
     });
   }, [router, t, title]);
+
+  const startRepairTask = useCallback(async (items: string[], recheck: boolean) => {
+    const source = currentSession?.sourceContext?.source;
+    if (!source || items.length === 0 || isStartingRepair) {
+      if (!source) requestFollowUp();
+      return;
+    }
+    const itemList = items.map((item) => `- ${item}`).join('\n');
+    const prompt = recheck
+      ? `次の修正項目がすべて直っているか再チェックしてください。今回は調査と検証だけを行い、追加の変更はしないでください。\n\n【再チェック項目】\n${itemList}\n\n各項目を「修正済み」「未修正」「確認が必要」に分類し、根拠を日本語で報告してください。`
+      : `次の点検指摘を修正してください。すべての修正後に、関連するビルド・テスト・スマホ表示を確認し、結果を日本語で報告してください。\n\n【修正項目】\n${itemList}`;
+    setIsStartingRepair(true);
+    try {
+      const session = await createSession(source, prompt, currentSession?.sourceContext?.githubRepoContext?.startingBranch, [], false);
+      if (!session) return;
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.push({ pathname: '/session/id', params: { id: session.name, title: session.title || t('repairTaskStarted') } });
+    } finally {
+      setIsStartingRepair(false);
+    }
+  }, [createSession, currentSession, isStartingRepair, requestFollowUp, router, t]);
 
   const stopTask = useCallback(() => {
     if (!id || isStoppingTask) return;
@@ -532,15 +572,58 @@ export default function SessionDetailScreen() {
                   </View>
                 )}
                 {sessionState === 'COMPLETED' && (
-                  <TouchableOpacity
-                    style={[styles.followUpButton, { backgroundColor: theme.primary }]}
-                    onPress={requestFollowUp}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('requestFollowUp')}
-                  >
-                    <IconSymbol name="paperplane.fill" size={18} color="#ffffff" />
-                    <Text style={styles.followUpButtonText}>{t('requestFollowUp')}</Text>
-                  </TouchableOpacity>
+                  <View style={[styles.repairCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                    <Text style={[styles.repairTitle, { color: theme.text }]}>{t('repairChecklist')}</Text>
+                    {repairItems.length > 0 ? (
+                      <>
+                        {repairItems.map((item) => {
+                          const selected = selectedRepairItems.has(item);
+                          return (
+                            <TouchableOpacity
+                              key={item}
+                              style={styles.repairItem}
+                              onPress={() => setSelectedRepairItems((current) => {
+                                const next = new Set(current);
+                                if (next.has(item)) next.delete(item); else next.add(item);
+                                return next;
+                              })}
+                              accessibilityRole="checkbox"
+                              accessibilityState={{ checked: selected }}
+                            >
+                              <IconSymbol name={selected ? 'checkmark.circle.fill' : 'circle'} size={21} color={selected ? theme.primary : theme.icon} />
+                              <Text style={[styles.repairItemText, { color: theme.text }]}>{item}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                        <TouchableOpacity
+                          style={[styles.followUpButton, { backgroundColor: theme.primary, opacity: selectedRepairItems.size > 0 && !isStartingRepair ? 1 : 0.5 }]}
+                          disabled={selectedRepairItems.size === 0 || isStartingRepair}
+                          onPress={() => void startRepairTask([...selectedRepairItems], false)}
+                        >
+                          <Text style={styles.followUpButtonText}>{t('repairSelected')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.secondaryRepairButton, { borderColor: theme.primary }]}
+                          disabled={isStartingRepair}
+                          onPress={() => void startRepairTask(repairItems, false)}
+                        >
+                          <Text style={[styles.secondaryRepairButtonText, { color: theme.primary }]}>{t('repairAll')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.secondaryRepairButton, { borderColor: theme.success }]}
+                          disabled={isStartingRepair}
+                          onPress={() => void startRepairTask(repairItems, true)}
+                        >
+                          <Text style={[styles.secondaryRepairButtonText, { color: theme.success }]}>{t('recheckRepairs')}</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <Text style={[styles.repairEmpty, { color: theme.icon }]}>{t('noRepairItems')}</Text>
+                    )}
+                    <TouchableOpacity onPress={requestFollowUp} accessibilityRole="button" accessibilityLabel={t('repairManual')}>
+                      <Text style={[styles.repairManualLink, { color: theme.primary }]}>{t('repairManual')}</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </>
             }
@@ -605,6 +688,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  repairCard: { marginTop: 16, borderWidth: 1, borderRadius: 16, padding: 14, gap: 10 },
+  repairTitle: { fontSize: 16, fontWeight: '800' },
+  repairItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, paddingVertical: 6 },
+  repairItemText: { flex: 1, fontSize: 13, lineHeight: 19 },
+  repairEmpty: { fontSize: 13, lineHeight: 19 },
+  repairManualLink: { fontSize: 13, fontWeight: '700', paddingVertical: 4 },
+  secondaryRepairButton: { minHeight: 46, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  secondaryRepairButtonText: { fontSize: 15, fontWeight: '700' },
   jobStatus: { marginHorizontal: 12, marginTop: 10, padding: 12, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 11 },
   jobStatusIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   jobStatusCopy: { flex: 1, minWidth: 0 },
