@@ -107,12 +107,17 @@ export default function SessionDetailScreen() {
     const texts = activities.flatMap((activity) => [
       activity.agentMessaged?.agentMessage,
       activity.progressUpdated?.description,
-      activity.userMessaged?.userMessage,
+      // A repair task carries its selected items here. An audit task's original
+      // checklist is intentionally excluded: it is not evidence of a defect.
+      activity.userMessaged?.userMessage?.includes('【修正項目】')
+        ? activity.userMessaged.userMessage
+        : undefined,
     ]).filter((text): text is string => Boolean(text));
     const items = texts.flatMap((text) => text.split('\n')).map((line) => line.trim())
       .filter((line) => /^(?:[-*・]|\d+[.)])\s+/.test(line))
       .map((line) => line.replace(/^(?:[-*・]|\d+[.)])\s+/, '').trim())
-      .filter((line) => line.length >= 8 && line.length <= 220);
+      .filter((line) => line.length >= 8 && line.length <= 220)
+      .filter((line) => !/(問題なし|修正不要|異常なし|該当なし|対応不要|no issues?|nothing to fix)/i.test(line));
     return [...new Set(items)].slice(0, 12);
   }, [activities]);
 
