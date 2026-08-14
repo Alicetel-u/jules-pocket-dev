@@ -301,10 +301,13 @@ export default function SessionDetailScreen() {
     <ActivityItem activity={item} onApprovePlan={handleApprovePlan} />
   ), [handleApprovePlan]);
 
-  const handleSend = async () => {
-    if (!messageInput.trim() || !id || isSendingInstruction) return;
+  const handleSend = async (requestCompletion = false) => {
+    if ((!messageInput.trim() && !requestCompletion) || !id || isSendingInstruction) return;
 
-    const messageToSend = messageInput;
+    const completionRequest = '追加の修正や回答はありません。この内容で作業を完了してください。';
+    const messageToSend = requestCompletion
+      ? messageInput.trim() ? `${messageInput.trim()}\n\n${completionRequest}` : completionRequest
+      : messageInput.trim();
     const optimisticName = `local-${Date.now()}`;
     const optimisticActivity: Activity = {
       name: optimisticName,
@@ -321,6 +324,7 @@ export default function SessionDetailScreen() {
     try {
       await sendMessage(id, messageToSend);
       await loadActivities();
+      await loadSessionState();
     } catch {
       setActivities((current) => current.filter((activity) => activity.name !== optimisticName));
       setMessageInput(messageToSend);
