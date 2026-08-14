@@ -294,6 +294,14 @@ export default function SessionDetailScreen() {
     }
   };
 
+  const requestFollowUp = useCallback(() => {
+    const taskTitle = title || t('sessions');
+    router.replace({
+      pathname: '/',
+      params: { followUp: `完了した「${taskTitle}」を確認し、次の修正をしてください。\n\n` },
+    });
+  }, [router, t, title]);
+
   const stopTask = useCallback(() => {
     if (!id || isStoppingTask) return;
     Alert.alert(t('stopTaskTitle'), t('stopTaskDescription'), [
@@ -523,6 +531,17 @@ export default function SessionDetailScreen() {
                     <IconSymbol name="arrow.clockwise" size={18} color={theme.primary} />
                   </View>
                 )}
+                {sessionState === 'COMPLETED' && (
+                  <TouchableOpacity
+                    style={[styles.followUpButton, { backgroundColor: theme.primary }]}
+                    onPress={requestFollowUp}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('requestFollowUp')}
+                  >
+                    <IconSymbol name="paperplane.fill" size={18} color="#ffffff" />
+                    <Text style={styles.followUpButtonText}>{t('requestFollowUp')}</Text>
+                  </TouchableOpacity>
+                )}
               </>
             }
           />
@@ -571,6 +590,20 @@ const styles = StyleSheet.create({
   },
   emptyTextDark: {
     color: '#94a3b8',
+  },
+  followUpButton: {
+    marginTop: 16,
+    minHeight: 52,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  followUpButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   jobStatus: { marginHorizontal: 12, marginTop: 10, padding: 12, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 11 },
   jobStatusIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

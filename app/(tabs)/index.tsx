@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApiKey } from '@/constants/api-key-context';
@@ -49,6 +49,7 @@ function formatTime(value: string): string {
 }
 
 export default function PocketHomeScreen() {
+  const { followUp } = useLocalSearchParams<{ followUp?: string }>();
   const { apiKey } = useApiKey();
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
@@ -88,6 +89,9 @@ export default function PocketHomeScreen() {
   }, [apiKey, fetchSessions, getDismissedSessions, getFavorites, selectedSource, syncAllSources]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (followUp) setPrompt(followUp);
+  }, [followUp]);
   useEffect(() => {
     if (!apiKey) return;
     const timer = setInterval(() => { void fetchSessions(true); }, 30000);
