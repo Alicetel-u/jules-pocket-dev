@@ -11,6 +11,7 @@ export interface PromptPreset {
 const FAVORITES_KEY = 'jules_pocket_favorite_projects';
 const PRESETS_KEY = 'jules_pocket_prompt_presets';
 const DISMISSED_SESSIONS_KEY = 'jules_pocket_dismissed_sessions';
+const COMPLETED_SEEN_AT_KEY = 'jules_pocket_completed_seen_at';
 
 export const DEFAULT_PROMPT_PRESETS: PromptPreset[] = [
   { id: 'bug-fix', title: 'バグを調査して修正', prompt: '発生している問題を調査し、原因を特定して修正してください。必要なテストも追加してください。' },
@@ -44,6 +45,10 @@ export function usePocketPreferences() {
   const saveDismissedSessions = useCallback(async (sessionNames: string[]) => {
     await setStoredItem(DISMISSED_SESSIONS_KEY, JSON.stringify(sessionNames));
   }, []);
+  const getCompletedSeenAt = useCallback(() => getStoredItem(COMPLETED_SEEN_AT_KEY), []);
+  const saveCompletedSeenAt = useCallback(async (value: string) => {
+    await setStoredItem(COMPLETED_SEEN_AT_KEY, value);
+  }, []);
 
-  return { getFavorites, saveFavorites, getPromptPresets, savePromptPresets, getDismissedSessions, saveDismissedSessions };
+  return { getFavorites, saveFavorites, getPromptPresets, savePromptPresets, getDismissedSessions, saveDismissedSessions, getCompletedSeenAt, saveCompletedSeenAt };
 }

@@ -53,7 +53,7 @@ export default function PocketHomeScreen() {
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? Colors.dark : Colors.light;
   const { t } = useI18n();
-  const { getFavorites, saveFavorites, getDismissedSessions, saveDismissedSessions } = usePocketPreferences();
+  const { getFavorites, saveFavorites, getDismissedSessions, saveDismissedSessions, getCompletedSeenAt, saveCompletedSeenAt } = usePocketPreferences();
   const [favorites, setFavorites] = useState<Source[]>([]);
   const [selectedSource, setSelectedSource] = useState<Source | null>(null);
   const [prompt, setPrompt] = useState('');
@@ -73,19 +73,28 @@ export default function PocketHomeScreen() {
   const [isDeletingTask, setIsDeletingTask] = useState(false);
   const [deleteTaskError, setDeleteTaskError] = useState<string | null>(null);
   const [deletedSessionNames, setDeletedSessionNames] = useState<Set<string>>(() => new Set());
+  const [completedSeenAt, setCompletedSeenAt] = useState<string | null>(null);
   const { sources, sessions, isLoading, error, clearError, syncAllSources, fetchSessions, createSession, deleteSession } = useJulesApi({ apiKey });
 
   const load = useCallback(async () => {
     if (!apiKey) return;
-    const [savedFavorites, dismissedSessions] = await Promise.all([getFavorites(), getDismissedSessions()]);
+    const [savedFavorites, dismissedSessions, savedCompletedSeenAt] = await Promise.all([getFavorites(), getDismissedSessions(), getCompletedSeenAt()]);
     setFavorites(savedFavorites);
     setDeletedSessionNames(new Set(dismissedSessions));
+    if (savedCompletedSeenAt) {
+      setCompletedSeenAt(savedCompletedSeenAt);
+    } else {
+      // Do not mark the user's existing history as new when this feature is first introduced.
+      const initialSeenAt = new Date().toISOString();
+      setCompletedSeenAt(initialSeenAt);
+      await saveCompletedSeenAt(initialSeenAt);
+    }
     const freshSources = await syncAllSources();
     const stillAvailable = savedFavorites.filter((favorite) => freshSources.some((source) => source.name === favorite.name));
     setFavorites(stillAvailable);
     if (!selectedSource && stillAvailable[0]) setSelectedSource(stillAvailable[0]);
     await fetchSessions(true);
-  }, [apiKey, fetchSessions, getDismissedSessions, getFavorites, selectedSource, syncAllSources]);
+  }, [apiKey, fetchSessions, getCompletedSeenAt, getDismissedSessions, getFavorites, saveCompletedSeenAt, selectedSource, syncAllSources]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
@@ -100,6 +109,11 @@ export default function PocketHomeScreen() {
     counts[groupFor(session)] += 1;
     return counts;
   }, { running: 0, waiting: 0, completed: 0 }), [visibleSessions]);
+  const hasNewCompletedTask = useMemo(() => {
+    if (!completedSeenAt) return false;
+    const seenAt = Date.parse(completedSeenAt);
+    return visibleSessions.some((session) => groupFor(session) === 'completed' && Date.parse(session.updateTime) > seenAt);
+  }, [completedSeenAt, visibleSessions]);
   const selectedIsFavorite = !!selectedSource && favorites.some((source) => source.name === selectedSource.name);
   const availableProjects = useMemo(() => {
     const query = projectQuery.trim().toLowerCase();
@@ -111,6 +125,14 @@ export default function PocketHomeScreen() {
     await load();
     setRefreshing(false);
   }, [load]);
+
+  const selectTaskGroup = useCallback((nextGroup: TaskGroup) => {
+    setGroup(nextGroup);
+    if (nextGroup !== 'completed') return;
+    const seenAt = new Date().toISOString();
+    setCompletedSeenAt(seenAt);
+    void saveCompletedSeenAt(seenAt);
+  }, [saveCompletedSeenAt]);
 
   const toggleFavorite = useCallback(async (source: Source) => {
     const next = favorites.some((item) => item.name === source.name)
@@ -214,7 +236,7 @@ export default function PocketHomeScreen() {
           <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.primary, opacity: selectedSource && !isLoading ? 1 : 0.55 }]} disabled={!selectedSource || isLoading} onPress={() => void sendToJules()}><Text style={styles.primaryButtonText}>{isLoading ? 'Julesに依頼中…' : taskMode === 'check' ? '点検を開始' : taskMode === 'debug' ? '調査と修正を依頼' : 'Julesへ任せる'}</Text></TouchableOpacity>
         </View> : null}
 
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>タスク状態</Text><View style={[styles.tabs, { backgroundColor: colors.surfaceSecondary }]}>{([{ key: 'running', label: '実行中' }, { key: 'waiting', label: '確認待ち' }, { key: 'completed', label: '完了' }] as { key: TaskGroup; label: string }[]).map((tab) => { const selected = group === tab.key; return <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected }} key={tab.key} onPress={() => setGroup(tab.key)} style={[styles.tab, selected && { backgroundColor: colors.surface, shadowColor: colors.primary }]}><Text numberOfLines={1} style={{ color: selected ? colors.primary : colors.icon, fontWeight: '800', fontSize: 13 }}>{tab.label}</Text><View style={[styles.tabCount, { backgroundColor: selected ? colors.primary : colors.border }]}><Text style={styles.tabCountText}>{taskCounts[tab.key]}</Text></View></TouchableOpacity>; })}</View>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>タスク状態</Text><View style={[styles.tabs, { backgroundColor: colors.surfaceSecondary }]}>{([{ key: 'running', label: '実行中' }, { key: 'waiting', label: '確認待ち' }, { key: 'completed', label: '完了' }] as { key: TaskGroup; label: string }[]).map((tab) => { const selected = group === tab.key; const badge = tab.key === 'completed' ? (hasNewCompletedTask ? t('newBadge') : null) : taskCounts[tab.key] > 0 ? String(taskCounts[tab.key]) : null; return <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected }} key={tab.key} onPress={() => selectTaskGroup(tab.key)} style={[styles.tab, selected && { backgroundColor: colors.surface, shadowColor: colors.primary }]}><Text numberOfLines={1} style={{ color: selected ? colors.primary : colors.icon, fontWeight: '800', fontSize: 13 }}>{tab.label}</Text>{badge ? <View style={[styles.tabCount, { backgroundColor: selected ? colors.primary : colors.border }]}><Text style={styles.tabCountText}>{badge}</Text></View> : null}</TouchableOpacity>; })}</View>
         {tasks.length === 0 ? <View style={[styles.emptyTasks, { backgroundColor: colors.surface, borderColor: colors.border }]}><IconSymbol name="checkmark.circle.fill" size={28} color={colors.success} /><Text style={[styles.emptyTasksTitle, { color: colors.text }]}>ここは空です</Text><Text style={[styles.hint, { color: colors.icon }]}>この分類のタスクはありません。</Text></View> : tasks.map((task) => <View key={task.name} style={[styles.task, { backgroundColor: colors.surface, borderColor: colors.border, shadowColor: colors.primary }]}><TouchableOpacity accessibilityRole="button" onPress={() => openTask(task)} style={styles.taskMain}><View style={styles.taskTop}><Text numberOfLines={2} ellipsizeMode="tail" style={[styles.taskTitle, { color: colors.text }]}>{task.title || 'Jules タスク'}</Text><View style={[styles.stateBadge, { backgroundColor: group === 'waiting' ? `${colors.warning}1F` : group === 'completed' ? `${colors.success}1F` : `${colors.primary}1F` }]}><Text numberOfLines={1} style={{ color: group === 'waiting' ? colors.warning : group === 'completed' ? colors.success : colors.primary, fontWeight: '800', fontSize: 11 }}>{stateLabel(task)}</Text></View></View><Text numberOfLines={1} ellipsizeMode="middle" style={[styles.taskProject, { color: colors.icon }]}>{task.name.replace(/^sessions\//, '')}</Text><View style={styles.taskFooter}><Text numberOfLines={1} style={[styles.taskTime, { color: colors.icon }]}>更新 {formatTime(task.updateTime)}</Text><IconSymbol name="chevron.right" size={17} color={colors.icon} /></View></TouchableOpacity>{group === 'waiting' ? <TouchableOpacity accessibilityRole="button" accessibilityLabel={t('deleteTask')} onPress={() => confirmDeleteTask(task)} style={[styles.deleteTaskButton, { borderTopColor: colors.border }]}><IconSymbol name="trash" size={17} color={colors.error} /><Text style={{ color: colors.error, fontWeight: '700', fontSize: 13 }}>{t('deleteTask')}</Text></TouchableOpacity> : null}</View>)}
       </ScrollView>
       <Modal visible={isProjectPickerVisible} animationType="slide" transparent onRequestClose={() => setIsProjectPickerVisible(false)}>

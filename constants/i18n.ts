@@ -145,6 +145,7 @@ const translations = {
     deleteTask: '削除',
     deleteTaskTitle: 'タスクを削除しますか？',
     deleteTaskMessage: 'このタスクはJulesから完全に削除されます。元に戻せません。',
+    newBadge: 'NEW',
 
     // Session States
     stateActive: '処理中',
@@ -353,6 +354,7 @@ const translations = {
     deleteTask: 'Delete',
     deleteTaskTitle: 'Delete this task?',
     deleteTaskMessage: 'This permanently removes the task from Jules and cannot be undone.',
+    newBadge: 'NEW',
 
     // Session States
     stateActive: 'Processing',
