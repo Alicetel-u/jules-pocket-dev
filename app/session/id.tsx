@@ -12,6 +12,7 @@ import {
   Linking,
   Alert,
   ActionSheetIOS,
+  TextInput,
 } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -51,6 +52,8 @@ export default function SessionDetailScreen() {
   const [isStoppingTask, setIsStoppingTask] = useState(false);
   const [selectedRepairItems, setSelectedRepairItems] = useState<Set<string>>(() => new Set());
   const [isStartingRepair, setIsStartingRepair] = useState(false);
+  const [showRepairChecklist, setShowRepairChecklist] = useState(false);
+  const [customRepairRequest, setCustomRepairRequest] = useState('');
   const keyboardPadding = useRef(new Animated.Value(0)).current;
   const preparingPulse = useRef(new Animated.Value(0.35)).current;
   const autoApprovedSessionRef = useRef<string | null>(null);
@@ -319,12 +322,8 @@ export default function SessionDetailScreen() {
   };
 
   const requestFollowUp = useCallback(() => {
-    const taskTitle = title || t('sessions');
-    router.push({
-      pathname: '/create-session',
-      params: { followUp: `完了した「${taskTitle}」を確認し、次の修正をしてください。\n\n` },
-    });
-  }, [router, t, title]);
+    setShowRepairChecklist(true);
+  }, []);
 
   const startRepairTask = useCallback(async (items: string[], recheck: boolean) => {
     const source = currentSession?.sourceContext?.source;
@@ -576,7 +575,18 @@ export default function SessionDetailScreen() {
                     <IconSymbol name="arrow.clockwise" size={18} color={theme.primary} />
                   </View>
                 )}
-                {sessionState === 'COMPLETED' && (
+                {sessionState === 'COMPLETED' && !showRepairChecklist && (
+                  <TouchableOpacity
+                    style={[styles.followUpButton, { backgroundColor: theme.primary }]}
+                    onPress={requestFollowUp}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('requestFollowUp')}
+                  >
+                    <IconSymbol name="paperplane.fill" size={18} color="#ffffff" />
+                    <Text style={styles.followUpButtonText}>{t('requestFollowUp')}</Text>
+                  </TouchableOpacity>
+                )}
+                {sessionState === 'COMPLETED' && showRepairChecklist && (
                   <View style={[styles.repairCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                     <Text style={[styles.repairTitle, { color: theme.text }]}>{t('repairChecklist')}</Text>
                     {repairItems.length > 0 ? (
@@ -625,8 +635,21 @@ export default function SessionDetailScreen() {
                     ) : (
                       <Text style={[styles.repairEmpty, { color: theme.icon }]}>{t('noRepairItems')}</Text>
                     )}
-                    <TouchableOpacity onPress={requestFollowUp} accessibilityRole="button" accessibilityLabel={t('repairManual')}>
-                      <Text style={[styles.repairManualLink, { color: theme.primary }]}>{t('repairManual')}</Text>
+                    <TextInput
+                      style={[styles.customRepairInput, { backgroundColor: theme.background, borderColor: theme.border, color: theme.text }]}
+                      value={customRepairRequest}
+                      onChangeText={setCustomRepairRequest}
+                      placeholder={t('customRepairPlaceholder')}
+                      placeholderTextColor={theme.icon}
+                      multiline
+                      textAlignVertical="top"
+                    />
+                    <TouchableOpacity
+                      style={[styles.secondaryRepairButton, { borderColor: theme.primary, opacity: customRepairRequest.trim() && !isStartingRepair ? 1 : 0.5 }]}
+                      disabled={!customRepairRequest.trim() || isStartingRepair}
+                      onPress={() => void startRepairTask([customRepairRequest.trim()], false)}
+                    >
+                      <Text style={[styles.secondaryRepairButtonText, { color: theme.primary }]}>{t('startCustomRepair')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -698,7 +721,7 @@ const styles = StyleSheet.create({
   repairItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, paddingVertical: 6 },
   repairItemText: { flex: 1, fontSize: 13, lineHeight: 19 },
   repairEmpty: { fontSize: 13, lineHeight: 19 },
-  repairManualLink: { fontSize: 13, fontWeight: '700', paddingVertical: 4 },
+  customRepairInput: { minHeight: 88, borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 14, lineHeight: 20 },
   secondaryRepairButton: { minHeight: 46, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   secondaryRepairButtonText: { fontSize: 15, fontWeight: '700' },
   jobStatus: { marginHorizontal: 12, marginTop: 10, padding: 12, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 11 },
