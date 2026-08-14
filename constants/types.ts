@@ -63,10 +63,11 @@ export interface SessionOutput {
 export interface Session {
   name: string; // "sessions/..."
   title?: string;
+  prompt?: string;
   sourceContext?: {
     source: string;
     githubRepoContext?: {
-      startingBranch: string;
+      startingBranch?: string;
     };
   };
   state: 
@@ -84,12 +85,6 @@ export interface Session {
   createTime: string;
   updateTime: string;
   outputs?: SessionOutput[];
-  sourceContext?: {
-    source: string;
-    githubRepoContext?: {
-      startingBranch?: string;
-    };
-  };
   submittedPr?: string;
   url?: string;
 }

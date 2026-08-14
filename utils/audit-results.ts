@@ -23,6 +23,9 @@ export interface PipelineProgress {
 /** Marker used in prompts so the client can recognize a one-click complete session. */
 export const ONE_CLICK_MARKER = '【ワンボタン完結】';
 
+/** Marker sent when the client auto-continues a one-click session that asked a question. */
+export const ONE_CLICK_CONTINUE_MARKER = '【ワンボタン継続】';
+
 export const CHECK_ITEM_LABELS: Record<CheckItemKey, string> = {
   build: '起動・ビルド',
   mobile: 'スマホ表示',
@@ -117,8 +120,34 @@ function userMessages(activities: Activity[]): string {
     .join('\n');
 }
 
-export function isOneClickCompleteSession(activities: Activity[]): boolean {
+export function isOneClickCompleteSession(
+  activities: Activity[],
+  session?: { prompt?: string; title?: string } | null,
+): boolean {
+  if (session?.prompt?.includes(ONE_CLICK_MARKER) || session?.title?.includes(ONE_CLICK_MARKER)) {
+    return true;
+  }
   return userMessages(activities).includes(ONE_CLICK_MARKER);
+}
+
+export function createOneClickContinueMessage(): string {
+  return `${ONE_CLICK_CONTINUE_MARKER}途中で止めないでください。追加の質問への回答は不要です。点検結果の修正、自己チェック、PR作成まで安全側で判断して一気に完了してください。`;
+}
+
+export function countOneClickContinues(activities: Activity[]): number {
+  return activities.filter((activity) => activity.userMessaged?.userMessage?.includes(ONE_CLICK_CONTINUE_MARKER)).length;
+}
+
+export function lastActivityIsOneClickContinue(activities: Activity[]): boolean {
+  const last = activities.at(-1);
+  return !!last?.userMessaged?.userMessage?.includes(ONE_CLICK_CONTINUE_MARKER);
+}
+
+export function getSessionFailureReason(activities: Activity[]): string | null {
+  const reasons = activities
+    .map((activity) => activity.sessionFailed?.reason?.trim())
+    .filter((reason): reason is string => !!reason);
+  return reasons.at(-1) ?? null;
 }
 
 export function isAuditOnlySession(activities: Activity[]): boolean {
@@ -204,13 +233,15 @@ export function detectPipelineProgress(
   const findings = parseAuditFindings(activities);
   const selfCheck = parseSelfCheckResult(activities);
   const working = sessionState === 'IN_PROGRESS' || sessionState === 'PLANNING' || sessionState === 'QUEUED';
-  const completed = sessionState === 'COMPLETED' || sessionState === 'FAILED';
+  const completed = sessionState === 'COMPLETED';
+  const failed = sessionState === 'FAILED';
+  const finished = completed || failed;
   const hasFindings = findings.length > 0;
 
-  const check: PipelineStepStatus = hasFindings || completed ? 'done' : working ? 'active' : 'waiting';
+  const check: PipelineStepStatus = hasFindings || finished ? 'done' : working ? 'active' : 'waiting';
   const fix: PipelineStepStatus = selfCheck || (completed && hasFindings)
     ? 'done'
-    : check === 'done' && working
+    : check === 'done' && (working || failed)
       ? 'active'
       : 'waiting';
   const review: PipelineStepStatus = selfCheck

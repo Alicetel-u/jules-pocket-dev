@@ -34,7 +34,17 @@ import { Colors } from '@/constants/theme';
 import { AuditResultPanel } from '@/components/jules/audit-result-panel';
 import { FinalReviewPanel } from '@/components/jules/final-review-panel';
 import { OneClickPipelinePanel } from '@/components/jules/one-click-pipeline-panel';
-import { CHECK_ITEM_KEYS, createOneClickCompletePrompt, isAuditOnlySession, isOneClickCompleteSession, ONE_CLICK_MARKER } from '@/utils/audit-results';
+import {
+  CHECK_ITEM_KEYS,
+  countOneClickContinues,
+  createOneClickCompletePrompt,
+  createOneClickContinueMessage,
+  getSessionFailureReason,
+  isAuditOnlySession,
+  isOneClickCompleteSession,
+  lastActivityIsOneClickContinue,
+  ONE_CLICK_MARKER,
+} from '@/utils/audit-results';
 
 export default function SessionDetailScreen() {
   const { id, title, submittedPr } = useLocalSearchParams<{ id: string; title: string; submittedPr?: string }>();
@@ -62,6 +72,7 @@ export default function SessionDetailScreen() {
   const keyboardPadding = useRef(new Animated.Value(0)).current;
   const preparingPulse = useRef(new Animated.Value(0.35)).current;
   const autoApprovedSessionRef = useRef<string | null>(null);
+  const oneClickContinueLockRef = useRef<string | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
   const { isLoading, error, clearError, fetchActivities, fetchActivitiesSince, fetchSession, approvePlan, sendMessage, deleteSession, createSession } = useJulesApi({ apiKey, t });
@@ -93,12 +104,13 @@ export default function SessionDetailScreen() {
         ? { title: t('sessionQueuedTitle'), detail: t('sessionQueuedDetail') }
         : { title: t('sessionConnectingTitle'), detail: t('sessionConnectingDetail') };
 
+  const failureReason = useMemo(() => getSessionFailureReason(activities), [activities]);
   const jobAction = sessionState === 'AWAITING_USER_FEEDBACK'
     ? t('jobFeedbackAction')
     : sessionState === 'COMPLETED'
       ? t('jobCompletedAction')
       : sessionState === 'FAILED'
-        ? t('jobFailedAction')
+        ? (failureReason || t('jobFailedAction'))
         : sessionState === 'IN_PROGRESS'
           ? t('jobWorkingAction')
           : t('jobWaitingAction');
@@ -376,7 +388,10 @@ export default function SessionDetailScreen() {
   }, [createSession, currentSession, isStartingRepair, router, t]);
 
   const isAuditSession = useMemo(() => isAuditOnlySession(activities), [activities]);
-  const isOneClickSession = useMemo(() => isOneClickCompleteSession(activities), [activities]);
+  const isOneClickSession = useMemo(
+    () => isOneClickCompleteSession(activities, currentSession),
+    [activities, currentSession],
+  );
 
   const startOneClickFromSession = useCallback(async () => {
     const source = currentSession?.sourceContext?.source;
@@ -415,6 +430,39 @@ export default function SessionDetailScreen() {
       setIsCreatingFix(false);
     }
   }, [createSession, currentSession?.sourceContext?.githubRepoContext?.startingBranch, currentSession?.sourceContext?.source, isCreatingFix, router, t]);
+
+  const sendOneClickContinue = useCallback(async () => {
+    if (!id || isSendingInstruction) return;
+    const messageToSend = createOneClickContinueMessage();
+    const optimisticName = `local-continue-${Date.now()}`;
+    const optimisticActivity: Activity = {
+      name: optimisticName,
+      id: optimisticName,
+      createTime: new Date().toISOString(),
+      originator: 'user',
+      userMessaged: { userMessage: messageToSend },
+    };
+    setIsSendingInstruction(true);
+    setActivities((current) => [...current, optimisticActivity]);
+    try {
+      await sendMessage(id, messageToSend);
+      await loadActivities();
+      await loadSessionState();
+    } catch {
+      setActivities((current) => current.filter((activity) => activity.name !== optimisticName));
+    } finally {
+      setIsSendingInstruction(false);
+    }
+  }, [id, isSendingInstruction, loadActivities, loadSessionState, sendMessage]);
+
+  useEffect(() => {
+    if (!id || !isOneClickSession || sessionState !== 'AWAITING_USER_FEEDBACK' || isSendingInstruction) return;
+    if (lastActivityIsOneClickContinue(activities) || countOneClickContinues(activities) >= 3) return;
+    const lockKey = `${id}:${countOneClickContinues(activities)}`;
+    if (oneClickContinueLockRef.current === lockKey) return;
+    oneClickContinueLockRef.current = lockKey;
+    void sendOneClickContinue();
+  }, [activities, id, isOneClickSession, isSendingInstruction, sendOneClickContinue, sessionState]);
 
   const stopTask = useCallback(() => {
     if (!id || isStoppingTask) return;
@@ -592,7 +640,7 @@ export default function SessionDetailScreen() {
                   isDark={isDark}
                 />
               )}
-              {sessionState === 'COMPLETED' && !currentSubmittedPr && (isAuditSession || isOneClickSession) && (
+              {(sessionState === 'COMPLETED' || sessionState === 'FAILED') && !currentSubmittedPr && (isAuditSession || isOneClickSession) && (
                 <AuditResultPanel activities={activities} isDark={isDark} isCreatingFix={isCreatingFix} onCreateFix={createFixTask} />
               )}
               {sessionState === 'COMPLETED' && currentSubmittedPr ? (
@@ -661,17 +709,17 @@ export default function SessionDetailScreen() {
                     <IconSymbol name="arrow.clockwise" size={18} color={theme.primary} />
                   </View>
                 )}
-                {sessionState === 'COMPLETED' && !showRepairChecklist && (
+                {(sessionState === 'COMPLETED' || sessionState === 'FAILED') && !showRepairChecklist && (
                   <>
                     <TouchableOpacity
                       style={[styles.followUpButton, { backgroundColor: theme.success, opacity: isCreatingFix ? 0.55 : 1 }]}
                       disabled={isCreatingFix}
                       onPress={() => void startOneClickFromSession()}
                       accessibilityRole="button"
-                      accessibilityLabel={t('oneClickSubmit')}
+                      accessibilityLabel={sessionState === 'FAILED' ? t('oneClickRetry') : t('oneClickSubmit')}
                     >
                       <IconSymbol name="bolt.fill" size={18} color="#ffffff" />
-                      <Text style={styles.followUpButtonText}>{isCreatingFix ? t('oneClickStarting') : t('oneClickSubmit')}</Text>
+                      <Text style={styles.followUpButtonText}>{isCreatingFix ? t('oneClickStarting') : sessionState === 'FAILED' ? t('oneClickRetry') : t('oneClickSubmit')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.followUpButton, { backgroundColor: theme.primary }]}

@@ -44,7 +44,9 @@ export function OneClickPipelinePanel({ activities, sessionState, hasPullRequest
         </View>
         <View style={styles.headingCopy}>
           <Text style={[styles.title, { color: colors.text }]}>{t('pipelineTitle')}</Text>
-          <Text style={[styles.description, { color: colors.icon }]}>{t('pipelineDescription')}</Text>
+          <Text style={[styles.description, { color: sessionState === 'FAILED' ? colors.error : colors.icon }]}>
+            {sessionState === 'FAILED' ? t('jobFailedAction') : t('pipelineDescription')}
+          </Text>
         </View>
       </View>
       <View style={styles.steps}>

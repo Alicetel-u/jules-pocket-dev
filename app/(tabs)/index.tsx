@@ -77,6 +77,7 @@ export default function PocketHomeScreen() {
   const [doneCriteria, setDoneCriteria] = useState('Web版をビルドし、スマホ表示で問題がないことを確認する');
   const [checkItems, setCheckItems] = useState(() => new Set<CheckItemKey>(['build', 'mobile', 'text', 'errors']));
   const [autoNotes, setAutoNotes] = useState('');
+  const [isStartingOneClick, setIsStartingOneClick] = useState(false);
   const [group, setGroup] = useState<TaskGroup>('running');
   const [refreshing, setRefreshing] = useState(false);
   const [isProjectPickerVisible, setIsProjectPickerVisible] = useState(false);
@@ -190,24 +191,30 @@ export default function PocketHomeScreen() {
   }, [bugAction, bugActual, bugExpected, bugFrequency, checkItems, createSession, doneCriteria, fetchSessions, prompt, protectedAreas, selectedSource, taskMode]);
 
   const sendOneClickComplete = useCallback(async () => {
+    if (isStartingOneClick) return;
     if (!selectedSource || checkItems.size === 0) {
       Alert.alert(t('oneClickNeedProject'));
       return;
     }
-    const session = await createSession(
-      selectedSource.name,
-      createOneClickCompletePrompt(checkItems, autoNotes),
-      selectedSource.githubRepo?.defaultBranch?.displayName || 'main',
-      [],
-      false,
-    );
-    if (!session) return;
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setAutoNotes('');
-    setTaskMode(null);
-    await fetchSessions(true);
-    router.push({ pathname: '/session/id', params: { id: session.name, title: session.title || t('oneClickTaskTitle') } });
-  }, [autoNotes, checkItems, createSession, fetchSessions, selectedSource, t]);
+    setIsStartingOneClick(true);
+    try {
+      const session = await createSession(
+        selectedSource.name,
+        createOneClickCompletePrompt(checkItems, autoNotes),
+        selectedSource.githubRepo?.defaultBranch?.displayName || 'main',
+        [],
+        false,
+      );
+      if (!session) return;
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setAutoNotes('');
+      setTaskMode(null);
+      await fetchSessions(true);
+      router.push({ pathname: '/session/id', params: { id: session.name, title: session.title || t('oneClickTaskTitle') } });
+    } finally {
+      setIsStartingOneClick(false);
+    }
+  }, [autoNotes, checkItems, createSession, fetchSessions, isStartingOneClick, selectedSource, t]);
 
   const openTask = useCallback((session: Session) => {
     router.push({ pathname: '/session/id', params: { id: session.name, title: session.title || 'Jules タスク', submittedPr: session.submittedPr || '' } });
@@ -293,13 +300,13 @@ export default function PocketHomeScreen() {
             placeholderTextColor={colors.icon}
           />
           <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: colors.success, opacity: selectedSource && !isLoading && checkItems.size > 0 ? 1 : 0.55 }]}
-            disabled={!selectedSource || isLoading || checkItems.size === 0}
+            style={[styles.primaryButton, { backgroundColor: colors.success, opacity: selectedSource && !isStartingOneClick && checkItems.size > 0 ? 1 : 0.55 }]}
+            disabled={!selectedSource || isStartingOneClick || checkItems.size === 0}
             onPress={() => void sendOneClickComplete()}
             accessibilityRole="button"
             accessibilityLabel={t('oneClickSubmit')}
           >
-            <Text style={styles.primaryButtonText}>{isLoading ? t('oneClickStarting') : t('oneClickSubmit')}</Text>
+            <Text style={styles.primaryButtonText}>{isStartingOneClick ? t('oneClickStarting') : t('oneClickSubmit')}</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.modeGrid}>

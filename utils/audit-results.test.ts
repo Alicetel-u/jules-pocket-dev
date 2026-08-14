@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  countOneClickContinues,
   createCheckPrompt,
   createFixRequest,
   createOneClickCompletePrompt,
+  createOneClickContinueMessage,
   createOneClickFixRequest,
   detectPipelineProgress,
+  getSessionFailureReason,
   isAuditOnlySession,
   isOneClickCompleteSession,
+  lastActivityIsOneClickContinue,
+  ONE_CLICK_CONTINUE_MARKER,
   ONE_CLICK_MARKER,
   parseAuditFindings,
   parseSelfCheckResult,
@@ -21,6 +26,7 @@ function activity(partial: Partial<Activity> & Pick<Activity, 'originator'>): Ac
     originator: partial.originator,
     agentMessaged: partial.agentMessaged,
     userMessaged: partial.userMessaged,
+    sessionFailed: partial.sessionFailed,
   };
 }
 
@@ -93,6 +99,30 @@ describe('audit results', () => {
     expect(isOneClickCompleteSession(oneClick)).toBe(true);
   });
 
+  it('recognizes one-click sessions from the session prompt before activities arrive', () => {
+    expect(isOneClickCompleteSession([], { prompt: createOneClickCompletePrompt(['build']) })).toBe(true);
+    expect(isOneClickCompleteSession([], { title: ONE_CLICK_MARKER })).toBe(true);
+    expect(isOneClickCompleteSession([], { title: 'Fix login' })).toBe(false);
+  });
+
+  it('builds a continue message and counts previous auto-continues', () => {
+    const continueMessage = createOneClickContinueMessage();
+    expect(continueMessage.startsWith(ONE_CLICK_CONTINUE_MARKER)).toBe(true);
+    const continued = [activity({ originator: 'user', userMessaged: { userMessage: continueMessage } })];
+    expect(countOneClickContinues(continued)).toBe(1);
+    expect(lastActivityIsOneClickContinue(continued)).toBe(true);
+    expect(lastActivityIsOneClickContinue([activity({ originator: 'agent', agentMessaged: { agentMessage: '質問です' } })])).toBe(false);
+  });
+
+  it('reads the latest session failure reason', () => {
+    const activities = [
+      activity({ originator: 'agent', sessionFailed: { reason: 'first' } }),
+      activity({ originator: 'agent', sessionFailed: { reason: 'sandbox crashed' } }),
+    ];
+    expect(getSessionFailureReason(activities)).toBe('sandbox crashed');
+    expect(getSessionFailureReason([])).toBeNull();
+  });
+
   it('advances pipeline progress from check through implementation', () => {
     const start = detectPipelineProgress([], 'QUEUED', false);
     expect(start).toEqual({
@@ -135,5 +165,14 @@ describe('audit results', () => {
     expect(stoppedAfterAudit.steps.check).toBe('done');
     expect(stoppedAfterAudit.steps.fix).toBe('done');
     expect(stoppedAfterAudit.steps.implement).toBe('waiting');
+
+    const failedDuringFix = detectPipelineProgress(
+      [activity({ originator: 'agent', agentMessaged: { agentMessage: auditMessage } })],
+      'FAILED',
+      false,
+    );
+    expect(failedDuringFix.steps.check).toBe('done');
+    expect(failedDuringFix.steps.fix).toBe('active');
+    expect(failedDuringFix.steps.implement).toBe('waiting');
   });
 });

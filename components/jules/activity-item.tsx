@@ -558,6 +558,22 @@ export const ActivityItem = React.memo(function ActivityItem({ activity, onAppro
     return <ProgressUpdatedActivity activity={activity} isDark={isDark} colors={colors} />;
   }
 
+  if (activity.sessionFailed) {
+    return (
+      <View style={styles.container}>
+        <View style={[styles.card, isDark && styles.cardDark, { borderColor: colors.error }]}>
+          <View style={styles.cardHeader}>
+            <IconSymbol name="xmark.circle.fill" size={16} color={colors.error} />
+            <Text style={[styles.cardTitle, { color: colors.error }]}>{t('activitySessionFailed')}</Text>
+          </View>
+          {activity.sessionFailed.reason ? (
+            <Text style={[styles.description, { color: colors.text }]}>{activity.sessionFailed.reason}</Text>
+          ) : null}
+        </View>
+      </View>
+    );
+  }
+
   return null;
 });
 

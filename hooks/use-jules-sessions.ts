@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import type { Session, Activity, ListSessionsResponse, ListActivitiesResponse } from '@/constants/types';
 import type { TranslatorFn } from '@/hooks/use-jules-fetch';
+import { ONE_CLICK_MARKER } from '@/utils/audit-results';
 
 interface UseJulesSessionsProps {
   julesFetch: <T>(endpoint: string, options?: RequestInit) => Promise<T>;
@@ -246,7 +247,9 @@ export function useJulesSessions({ julesFetch, translate, setIsLoading, setError
           sourceContext: {
             source: sourceName,
           },
-          title: prompt.trim().slice(0, 30) + (prompt.trim().length > 30 ? '...' : ''),
+          title: prompt.includes(ONE_CLICK_MARKER)
+            ? translate('oneClickTaskTitle', 'ワンボタン完結')
+            : prompt.trim().slice(0, 30) + (prompt.trim().length > 30 ? '...' : ''),
           automationMode: 'AUTO_CREATE_PR',
         };
 
