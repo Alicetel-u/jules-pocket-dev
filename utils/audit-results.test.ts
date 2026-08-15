@@ -108,6 +108,8 @@ describe('audit results', () => {
   it('builds a continue message and counts previous auto-continues', () => {
     const continueMessage = createOneClickContinueMessage();
     expect(continueMessage.startsWith(ONE_CLICK_CONTINUE_MARKER)).toBe(true);
+    expect(continueMessage).toContain('この進捗で問題ありません');
+    expect(continueMessage).toContain('PR作成まで一気に完了');
     const continued = [activity({ originator: 'user', userMessaged: { userMessage: continueMessage } })];
     expect(countOneClickContinues(continued)).toBe(1);
     expect(lastActivityIsOneClickContinue(continued)).toBe(true);

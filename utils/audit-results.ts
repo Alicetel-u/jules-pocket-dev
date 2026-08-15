@@ -26,6 +26,10 @@ export const ONE_CLICK_MARKER = '【ワンボタン完結】';
 /** Marker sent when the client auto-continues a one-click session that asked a question. */
 export const ONE_CLICK_CONTINUE_MARKER = '【ワンボタン継続】';
 
+/** Avoid rapid duplicate replies while still allowing a long-running pipeline to continue. */
+export const ONE_CLICK_CONTINUE_RETRY_MS = 20_000;
+export const ONE_CLICK_MAX_CONTINUES = 10;
+
 export const CHECK_ITEM_LABELS: Record<CheckItemKey, string> = {
   build: '起動・ビルド',
   mobile: 'スマホ表示',
@@ -131,7 +135,7 @@ export function isOneClickCompleteSession(
 }
 
 export function createOneClickContinueMessage(): string {
-  return `${ONE_CLICK_CONTINUE_MARKER}途中で止めないでください。追加の質問への回答は不要です。点検結果の修正、自己チェック、PR作成まで安全側で判断して一気に完了してください。`;
+  return `${ONE_CLICK_CONTINUE_MARKER}はい、この進捗で問題ありません。現在の方針を承認します。追加確認は不要です。安全側で判断して作業を続行し、点検結果の修正、自己チェック、コミット、PR作成まで一気に完了してください。完了前に質問や確認待ちで停止しないでください。`;
 }
 
 export function countOneClickContinues(activities: Activity[]): number {

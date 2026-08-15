@@ -43,6 +43,8 @@ import {
   isAuditOnlySession,
   isOneClickCompleteSession,
   lastActivityIsOneClickContinue,
+  ONE_CLICK_CONTINUE_RETRY_MS,
+  ONE_CLICK_MAX_CONTINUES,
   ONE_CLICK_MARKER,
 } from '@/utils/audit-results';
 
@@ -450,6 +452,7 @@ export default function SessionDetailScreen() {
       await loadSessionState();
     } catch {
       setActivities((current) => current.filter((activity) => activity.name !== optimisticName));
+      oneClickContinueLockRef.current = null;
     } finally {
       setIsSendingInstruction(false);
     }
@@ -457,11 +460,20 @@ export default function SessionDetailScreen() {
 
   useEffect(() => {
     if (!id || !isOneClickSession || sessionState !== 'AWAITING_USER_FEEDBACK' || isSendingInstruction) return;
-    if (lastActivityIsOneClickContinue(activities) || countOneClickContinues(activities) >= 3) return;
-    const lockKey = `${id}:${countOneClickContinues(activities)}`;
+    const continueCount = countOneClickContinues(activities);
+    if (continueCount >= ONE_CLICK_MAX_CONTINUES) return;
+    const lastActivity = activities.at(-1);
+    const lastIsContinue = lastActivityIsOneClickContinue(activities);
+    const lastActivityTime = lastActivity ? Date.parse(lastActivity.createTime) : Number.NaN;
+    const elapsed = Number.isNaN(lastActivityTime) ? ONE_CLICK_CONTINUE_RETRY_MS : Date.now() - lastActivityTime;
+    const retryDelay = lastIsContinue ? Math.max(0, ONE_CLICK_CONTINUE_RETRY_MS - elapsed) : 0;
+    const lockKey = `${id}:${continueCount}:${lastActivity?.name ?? 'none'}`;
     if (oneClickContinueLockRef.current === lockKey) return;
-    oneClickContinueLockRef.current = lockKey;
-    void sendOneClickContinue();
+    const timer = setTimeout(() => {
+      oneClickContinueLockRef.current = lockKey;
+      void sendOneClickContinue();
+    }, retryDelay);
+    return () => clearTimeout(timer);
   }, [activities, id, isOneClickSession, isSendingInstruction, sendOneClickContinue, sessionState]);
 
   const stopTask = useCallback(() => {
