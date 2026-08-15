@@ -51,7 +51,7 @@ export function SessionInput({
         />
         <TouchableOpacity
           style={[styles.sendButton, { backgroundColor: colors.primary, shadowColor: colors.primary }, (!messageInput.trim() || isSending) && { backgroundColor: colors.border }]}
-          onPress={handleSend}
+          onPress={() => handleSend()}
           disabled={!messageInput.trim() || isSending}
           accessibilityLabel="Send message"
           accessibilityRole="button"
