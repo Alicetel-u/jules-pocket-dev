@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,7 +11,8 @@ import { useJulesApi } from '@/hooks/use-jules-api';
 import { usePocketPreferences } from '@/hooks/use-pocket-preferences';
 import { useI18n } from '@/constants/i18n-context';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { CHECK_ITEM_KEYS, createCheckPrompt, createOneClickCompletePrompt, type CheckItemKey } from '@/utils/audit-results';
+import { CHECK_ITEM_KEYS, createCheckPrompt, type CheckItemKey } from '@/utils/audit-results';
+import { createGitHubJulesIssueUrl } from '@/utils/github-jules-issue';
 
 type TaskGroup = 'running' | 'waiting' | 'completed';
 type TaskMode = 'build' | 'debug' | 'check';
@@ -196,25 +197,33 @@ export default function PocketHomeScreen() {
       Alert.alert(t('oneClickNeedProject'));
       return;
     }
+    const githubRepo = selectedSource.githubRepo;
+    if (!githubRepo) {
+      Alert.alert(t('oneClickGitHubOnly'));
+      return;
+    }
     setIsStartingOneClick(true);
     try {
-      const session = await createSession(
-        selectedSource.name,
-        createOneClickCompletePrompt(checkItems, autoNotes),
-        selectedSource.githubRepo?.defaultBranch?.displayName || 'main',
-        [],
-        false,
-      );
-      if (!session) return;
+      const issueUrl = createGitHubJulesIssueUrl({
+        owner: githubRepo.owner,
+        repo: githubRepo.repo,
+        branch: githubRepo.defaultBranch?.displayName || 'main',
+        checkItems,
+        notes: autoNotes,
+      });
+      const supported = await Linking.canOpenURL(issueUrl);
+      if (!supported) {
+        Alert.alert(t('oneClickOpenFailed'));
+        return;
+      }
+      await Linking.openURL(issueUrl);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setAutoNotes('');
-      setTaskMode(null);
-      await fetchSessions(true);
-      router.push({ pathname: '/session/id', params: { id: session.name, title: session.title || t('oneClickTaskTitle') } });
+    } catch {
+      Alert.alert(t('oneClickOpenFailed'));
     } finally {
       setIsStartingOneClick(false);
     }
-  }, [autoNotes, checkItems, createSession, fetchSessions, isStartingOneClick, selectedSource, t]);
+  }, [autoNotes, checkItems, isStartingOneClick, selectedSource, t]);
 
   const openTask = useCallback((session: Session) => {
     router.push({ pathname: '/session/id', params: { id: session.name, title: session.title || 'Jules タスク', submittedPr: session.submittedPr || '' } });
@@ -296,6 +305,7 @@ export default function PocketHomeScreen() {
             value={autoNotes}
             onChangeText={setAutoNotes}
             multiline
+            maxLength={1500}
             placeholder={t('oneClickNotesPlaceholder')}
             placeholderTextColor={colors.icon}
           />
